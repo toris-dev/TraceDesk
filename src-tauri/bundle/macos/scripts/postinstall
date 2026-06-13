@@ -1,0 +1,7 @@
+#!/bin/bash
+# PKG 설치 완료 후 TraceDesk 실행 (초기 설정은 앱 내 마법사에서 선택)
+APP="/Applications/TraceDesk.app"
+if [ -d "$APP" ]; then
+  /usr/bin/open "$APP"
+fi
+exit 0

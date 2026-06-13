@@ -1,0 +1,25 @@
+/target
+**/*.rs.bk
+*.db
+*.db-shm
+*.db-wal
+.DS_Store
+
+# Legacy root Rust (removed — use src-tauri)
+/src/
+
+# Frontend
+frontend/node_modules
+frontend/dist
+
+# Tauri
+src-tauri/target
+node_modules
+
+# Environment
+.env
+.env.*
+
+# Generated icon source
+app-icon.png
+

@@ -1,0 +1,60 @@
+[package]
+name = "tracedesk"
+version = "0.1.0"
+description = "Personal Computer Activity Intelligence System"
+authors = ["TraceDesk"]
+edition = "2021"
+
+[lib]
+name = "tracedesk_lib"
+crate-type = ["lib", "cdylib", "staticlib"]
+
+[[bin]]
+name = "tracedesk"
+path = "src/main.rs"
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
+
+[dependencies]
+tauri = { version = "2", features = ["tray-icon", "protocol-asset"] }
+tauri-plugin-shell = "2"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+tokio = { version = "1", features = ["full"] }
+rusqlite = { version = "0.32", features = ["bundled", "chrono"] }
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+chrono = { version = "0.4", features = ["serde"] }
+active-win-pos-rs = "0.8"
+dirs = "6"
+anyhow = "1"
+thiserror = "2"
+user-idle = "0.6"
+arboard = "3"
+notify = "7"
+crossbeam-channel = "0.5"
+parking_lot = "0.12"
+sysinfo = "0.33"
+flate2 = "1"
+tauri-plugin-autostart = "2"
+image = { version = "0.25", default-features = false, features = ["jpeg", "png"] }
+
+[target.'cfg(target_os = "macos")'.dependencies]
+core-foundation = "0.9"
+cocoa = "0.22"
+block = "0.1"
+objc = "0.2"
+
+[target.'cfg(not(target_os = "macos"))'.dependencies]
+rdev = "0.5"
+
+[profile.release]
+panic = "abort"
+codegen-units = 1
+lto = true
+opt-level = "s"
+strip = true
+
+[lints.rust]
+unexpected_cfgs = { level = "warn", check-cfg = ['cfg(feature, values("cargo-clippy"))'] }
