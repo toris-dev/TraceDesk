@@ -92,7 +92,9 @@ mod platform {
     #[link(name = "ApplicationServices", kind = "framework")]
     extern "C" {
         fn AXIsProcessTrusted() -> bool;
-        fn AXIsProcessTrustedWithOptions(opts: core_foundation::dictionary::CFDictionaryRef) -> bool;
+        fn AXIsProcessTrustedWithOptions(
+            opts: core_foundation::dictionary::CFDictionaryRef,
+        ) -> bool;
     }
 
     #[link(name = "CoreGraphics", kind = "framework")]
@@ -201,7 +203,8 @@ mod platform {
                     "창 제목·세부 추적에 필요합니다. 시스템 설정 → 개인정보 보호 → 화면 및 시스템 오디오 녹음에서 「{app_label}」을(를) 허용하세요."
                 )
             } else if screen_granted && !tracking_works {
-                "화면 녹화 권한 허용 후에도 창 제목이 비어 있을 수 있습니다. 앱을 재시작해 보세요.".into()
+                "화면 녹화 권한 허용 후에도 창 제목이 비어 있을 수 있습니다. 앱을 재시작해 보세요."
+                    .into()
             } else {
                 "활성 창 제목·세부 정보 추적에 사용됩니다 (CGWindowList API).".into()
             };
@@ -241,17 +244,19 @@ mod platform {
         });
 
         let all_granted = permissions.iter().all(|p| !p.required || p.granted);
-        let restart_recommended = want_accessibility
-            && accessibility_granted
-            && screen_granted
-            && !tracking_works;
+        let restart_recommended =
+            want_accessibility && accessibility_granted && screen_granted && !tracking_works;
 
         PermissionStatus {
             platform: "macos".into(),
             all_granted,
             permissions,
             app_label: Some(app_label),
-            restart_recommended: if restart_recommended { Some(true) } else { None },
+            restart_recommended: if restart_recommended {
+                Some(true)
+            } else {
+                None
+            },
         }
     }
 
@@ -320,7 +325,8 @@ mod platform {
                 name: "키보드 단축키 감지".into(),
                 granted: true,
                 required: want_input_monitoring,
-                description: "Ctrl+C/V, PrintScreen, Win+Shift+S 등 단축키 감지에 사용됩니다.".into(),
+                description: "Ctrl+C/V, PrintScreen, Win+Shift+S 등 단축키 감지에 사용됩니다."
+                    .into(),
                 functional: None,
             },
         ];

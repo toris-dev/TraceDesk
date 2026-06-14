@@ -10,6 +10,7 @@ import {
 } from "recharts";
 import type { PortInfo, ProcessInfo, SystemSnapshot } from "../api/client";
 import { formatMemoryGb, formatMemoryUsage, getSystemSnapshot, killPortProcess } from "../api/client";
+import { useTheme } from "../theme";
 import { MascotScene } from "./mascot";
 
 const POLL_MS = 1_000;
@@ -20,6 +21,7 @@ interface Props {
 }
 
 export function SystemMonitor({ connected }: Props) {
+  const { chart } = useTheme();
   const [snapshot, setSnapshot] = useState<SystemSnapshot | null>(null);
   const [history, setHistory] = useState<{ t: string; cpu: number; mem: number }[]>([]);
   const [portFilter, setPortFilter] = useState("");
@@ -111,7 +113,7 @@ export function SystemMonitor({ connected }: Props) {
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <div>
-          <h2 className="text-lg font-semibold">시스템 모니터</h2>
+          <h2 className="text-lg font-semibold text-text">시스템 모니터</h2>
           <p className="text-sm text-text-muted">CPU · 메모리 · 포트 — 1초마다 갱신</p>
         </div>
         <button
@@ -119,8 +121,8 @@ export function SystemMonitor({ connected }: Props) {
           onClick={() => setPaused((p) => !p)}
           className={`text-sm px-3 py-1.5 rounded-lg border transition-colors ${
             paused
-              ? "border-amber-500 text-amber-400 bg-amber-500/10"
-              : "border-border hover:bg-surface-elevated"
+              ? "border-warning text-warning-text bg-warning/10"
+              : "border-border text-text hover:bg-surface-elevated"
           }`}
         >
           {paused ? "▶ 재개" : "⏸ 일시정지"}
@@ -156,7 +158,7 @@ export function SystemMonitor({ connected }: Props) {
               <p className="text-text-muted text-sm mb-1">TraceDesk 프로세스</p>
               {snapshot.tracedesk ? (
                 <div className="space-y-1">
-                  <p className="text-lg font-semibold">
+                  <p className="text-lg font-semibold text-text">
                     CPU {snapshot.tracedesk.cpu_percent.toFixed(1)}% ·{" "}
                     {formatMemoryGb(snapshot.tracedesk.memory_mb)}
                   </p>
@@ -172,28 +174,33 @@ export function SystemMonitor({ connected }: Props) {
           </div>
 
           <section className="rounded-xl border border-border bg-surface-elevated p-6">
-            <h3 className="font-semibold mb-4">실시간 추이 (최근 {HISTORY_LEN}초)</h3>
+            <h3 className="font-semibold mb-4 text-text">실시간 추이 (최근 {HISTORY_LEN}초)</h3>
             <ResponsiveContainer width="100%" height={200}>
               <AreaChart data={history}>
                 <defs>
                   <linearGradient id="cpuGrad" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="5%" stopColor="#6366f1" stopOpacity={0.35} />
-                    <stop offset="95%" stopColor="#6366f1" stopOpacity={0} />
+                    <stop offset="5%" stopColor={chart.accent} stopOpacity={0.35} />
+                    <stop offset="95%" stopColor={chart.accent} stopOpacity={0} />
                   </linearGradient>
                   <linearGradient id="memGrad" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="5%" stopColor="#22c55e" stopOpacity={0.35} />
-                    <stop offset="95%" stopColor="#22c55e" stopOpacity={0} />
+                    <stop offset="5%" stopColor={chart.success} stopOpacity={0.35} />
+                    <stop offset="95%" stopColor={chart.success} stopOpacity={0} />
                   </linearGradient>
                 </defs>
-                <CartesianGrid strokeDasharray="3 3" stroke="#2a2f3d" />
-                <XAxis dataKey="t" stroke="#94a3b8" fontSize={10} interval="preserveStartEnd" />
-                <YAxis stroke="#94a3b8" fontSize={11} domain={[0, 100]} tickFormatter={(v) => `${v}%`} />
+                <CartesianGrid strokeDasharray="3 3" stroke={chart.grid} />
+                <XAxis dataKey="t" stroke={chart.axis} fontSize={10} interval="preserveStartEnd" />
+                <YAxis stroke={chart.axis} fontSize={11} domain={[0, 100]} tickFormatter={(v) => `${v}%`} />
                 <Tooltip
-                  contentStyle={{ background: "#1a1d27", border: "1px solid #2a2f3d", borderRadius: 8 }}
+                  contentStyle={{
+                    background: chart.tooltipBg,
+                    border: `1px solid ${chart.tooltipBorder}`,
+                    borderRadius: 8,
+                    color: chart.tooltipText,
+                  }}
                   formatter={(v, name) => [`${Number(v).toFixed(1)}%`, name === "cpu" ? "CPU" : "메모리"]}
                 />
-                <Area type="monotone" dataKey="cpu" stroke="#6366f1" fill="url(#cpuGrad)" strokeWidth={2} name="cpu" />
-                <Area type="monotone" dataKey="mem" stroke="#22c55e" fill="url(#memGrad)" strokeWidth={2} name="mem" />
+                <Area type="monotone" dataKey="cpu" stroke={chart.accent} fill="url(#cpuGrad)" strokeWidth={2} name="cpu" />
+                <Area type="monotone" dataKey="mem" stroke={chart.success} fill="url(#memGrad)" strokeWidth={2} name="mem" />
               </AreaChart>
             </ResponsiveContainer>
           </section>
@@ -201,19 +208,19 @@ export function SystemMonitor({ connected }: Props) {
           <div className="grid lg:grid-cols-2 gap-6">
             <section className="rounded-xl border border-border bg-surface-elevated p-6">
               <div className="flex items-center justify-between mb-4 gap-2 flex-wrap">
-                <h3 className="font-semibold">사용 중인 포트</h3>
+                <h3 className="font-semibold text-text">사용 중인 포트</h3>
                 <div className="flex gap-2">
                   <input
                     type="text"
                     placeholder="포트/프로세스 검색"
                     value={portFilter}
                     onChange={(e) => setPortFilter(e.target.value)}
-                    className="text-sm px-3 py-1.5 rounded-lg bg-surface border border-border w-40"
+                    className="text-sm px-3 py-1.5 rounded-lg bg-surface border border-border text-text w-40 placeholder:text-text-muted"
                   />
                   <select
                     value={sortBy}
                     onChange={(e) => setSortBy(e.target.value as typeof sortBy)}
-                    className="text-sm px-2 py-1.5 rounded-lg bg-surface border border-border"
+                    className="text-sm px-2 py-1.5 rounded-lg bg-surface border border-border text-text"
                   >
                     <option value="port">포트순</option>
                     <option value="process">프로세스순</option>
@@ -225,7 +232,7 @@ export function SystemMonitor({ connected }: Props) {
             </section>
 
             <section className="rounded-xl border border-border bg-surface-elevated p-6">
-              <h3 className="font-semibold mb-4">CPU Top 프로세스</h3>
+              <h3 className="font-semibold mb-4 text-text">CPU Top 프로세스</h3>
               <ProcessTable processes={snapshot.top_processes} />
             </section>
           </div>
@@ -251,7 +258,7 @@ function MetricCard({
   return (
     <div className="rounded-xl border border-border bg-surface-elevated p-4">
       <p className="text-text-muted text-sm mb-1">{label}</p>
-      <p className="text-xl font-semibold mb-1">{value}</p>
+      <p className="text-xl font-semibold mb-1 text-text">{value}</p>
       {subValue && <p className="text-xs text-text-muted mb-3">{subValue}</p>}
       {!subValue && <div className="mb-3" />}
       <div className="h-2 bg-border rounded-full overflow-hidden">
@@ -311,7 +318,7 @@ function PortTable({
                     type="button"
                     disabled={killingPid === p.pid}
                     onClick={() => onKill(p)}
-                    className="text-xs px-2 py-1 rounded border border-red-500/40 text-red-400 hover:bg-red-500/10 disabled:opacity-50 transition-colors"
+                    className="text-xs px-2 py-1 rounded border border-danger/40 text-danger-text hover:bg-danger/10 disabled:opacity-50 transition-colors"
                     title="프로세스 종료"
                   >
                     {killingPid === p.pid ? "…" : "종료"}

@@ -19,7 +19,8 @@ pub fn create_screenshot_thumbnail(source: &Path, event_id: i64) -> Result<PathB
     fs::create_dir_all(&thumb_dir).context("failed to create thumbnails directory")?;
 
     let dest = thumb_dir.join(format!("{event_id}.jpg"));
-    let img = image::open(source).with_context(|| format!("failed to open screenshot: {}", source.display()))?;
+    let img = image::open(source)
+        .with_context(|| format!("failed to open screenshot: {}", source.display()))?;
     let (width, height) = img.dimensions();
     let thumb = if width > MAX_DIMENSION || height > MAX_DIMENSION {
         img.thumbnail(MAX_DIMENSION, MAX_DIMENSION)
@@ -51,8 +52,5 @@ fn wait_for_stable_file(path: &Path) -> Result<()> {
         last_len = Some(len);
         std::thread::sleep(FILE_STABLE_DELAY);
     }
-    anyhow::bail!(
-        "screenshot file not ready: {}",
-        path.display()
-    )
+    anyhow::bail!("screenshot file not ready: {}", path.display())
 }

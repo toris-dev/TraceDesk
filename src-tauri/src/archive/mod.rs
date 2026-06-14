@@ -66,13 +66,12 @@ pub fn collect_db_stats(retention_days: u32, last_archive_at: Option<String>) ->
     let active_db_bytes = fs::metadata(&db_path).map(|m| m.len()).unwrap_or(0);
 
     let conn = Connection::open(&db_path)?;
-    let event_count: i64 = conn.query_row("SELECT COUNT(*) FROM activity_events", [], |r| r.get(0))?;
+    let event_count: i64 =
+        conn.query_row("SELECT COUNT(*) FROM activity_events", [], |r| r.get(0))?;
     let oldest_event: Option<String> = conn
-        .query_row(
-            "SELECT MIN(created_at) FROM activity_events",
-            [],
-            |r| r.get(0),
-        )
+        .query_row("SELECT MIN(created_at) FROM activity_events", [], |r| {
+            r.get(0)
+        })
         .ok();
 
     let archives = list_archives()?;
@@ -286,8 +285,9 @@ pub fn list_archives() -> Result<Vec<ArchiveInfo>> {
 fn read_archive_event_count(gz_path: &Path) -> Result<i64> {
     let temp = gz_path.with_extension(""); // .db
     decompress_gz(gz_path, &temp)?;
-    let count: i64 = Connection::open(&temp)?
-        .query_row("SELECT COUNT(*) FROM activity_events", [], |r| r.get(0))?;
+    let count: i64 =
+        Connection::open(&temp)?
+            .query_row("SELECT COUNT(*) FROM activity_events", [], |r| r.get(0))?;
     let _ = fs::remove_file(&temp);
     Ok(count)
 }

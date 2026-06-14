@@ -56,7 +56,7 @@ export function ActivityBar({
   return (
     <div className="rounded-xl border border-border bg-surface-elevated p-6">
       <div className="flex items-center justify-between mb-4">
-        <h2 className="text-lg font-semibold">{title}</h2>
+        <h2 className="text-lg font-semibold text-text">{title}</h2>
         <span className="text-accent-muted font-mono text-sm">
           08:00 ─────────── 24:00
         </span>

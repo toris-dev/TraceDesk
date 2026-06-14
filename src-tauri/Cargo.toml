@@ -1,6 +1,6 @@
 [package]
 name = "tracedesk"
-version = "0.1.0"
+version = "0.1.1"
 description = "Personal Computer Activity Intelligence System"
 authors = ["TraceDesk"]
 edition = "2021"
@@ -38,7 +38,9 @@ parking_lot = "0.12"
 sysinfo = "0.33"
 flate2 = "1"
 tauri-plugin-autostart = "2"
+tauri-plugin-dialog = "2"
 image = { version = "0.25", default-features = false, features = ["jpeg", "png"] }
+tauri-plugin-process = "2"
 
 [target.'cfg(target_os = "macos")'.dependencies]
 core-foundation = "0.9"
@@ -48,6 +50,9 @@ objc = "0.2"
 
 [target.'cfg(not(target_os = "macos"))'.dependencies]
 rdev = "0.5"
+
+[target.'cfg(not(any(target_os = "android", target_os = "ios")))'.dependencies]
+tauri-plugin-updater = "2"
 
 [profile.release]
 panic = "abort"

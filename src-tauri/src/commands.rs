@@ -1,8 +1,9 @@
+use crate::activity_item::ActivityItem;
 use crate::analytics::{
-    analyze_productivity, build_action_hourly, build_full_timeline, build_hourly_activity,
-    build_idle_analysis, build_timeline, build_weekly_report, build_weekly_report_current,
-    compute_daily_statistics, ActionHourlyPoint, DailyStatistics, FullTimelineItem, IdleAnalysis,
-    ProductivityAnalysis, WeeklyReport,
+    analyze_productivity, build_action_hourly, build_activity_bundle, build_full_timeline,
+    build_hourly_activity, build_idle_analysis, build_timeline, build_weekly_report,
+    build_weekly_report_current, compute_daily_statistics, ActionHourlyPoint, ActivityBundle,
+    DailyStatistics, FullTimelineItem, IdleAnalysis, ProductivityAnalysis, WeeklyReport,
 };
 use crate::database::models::ApplicationUsage;
 use crate::os::{self, PermissionStatus};
@@ -11,22 +12,7 @@ use crate::state::AppState;
 use crate::system::{collect_snapshot, lock_system, SystemSnapshot};
 use chrono::{Local, NaiveDate};
 use serde::Serialize;
-use tauri::State;
-
-#[derive(Debug, Serialize)]
-pub struct ActivityItem {
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub id: Option<i64>,
-    #[serde(rename = "type")]
-    pub event_type: String,
-    pub time: String,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub name: Option<String>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub duration: Option<i64>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub metadata: Option<serde_json::Value>,
-}
+use tauri::{Manager, State};
 
 #[derive(Debug, Serialize)]
 pub struct HourlyActivityItem {
@@ -47,18 +33,35 @@ pub fn get_activity_today(
     date: Option<String>,
 ) -> Result<Vec<ActivityItem>, String> {
     let date = parse_date(date)?;
-    let events = state.repository.get_events_for_date(date).map_err(|e| e.to_string())?;
+    let events = state
+        .repository
+        .get_events_for_date(date)
+        .map_err(|e| e.to_string())?;
     Ok(events
         .into_iter()
         .map(|e| ActivityItem {
             id: e.id,
             event_type: e.event_type.as_str().to_string(),
-            time: e.created_at.format("%H:%M:%S").to_string(),
+            time: e
+                .created_at
+                .with_timezone(&chrono::Local)
+                .format("%H:%M:%S")
+                .to_string(),
             name: e.application,
+            window_title: e.window_title,
             duration: e.duration,
             metadata: e.metadata,
         })
         .collect())
+}
+
+#[tauri::command]
+pub fn get_activity_bundle(
+    state: State<AppState>,
+    date: Option<String>,
+) -> Result<ActivityBundle, String> {
+    let date = parse_date(date)?;
+    build_activity_bundle(&state.repository, date).map_err(|e| e.to_string())
 }
 
 #[tauri::command]
@@ -176,6 +179,7 @@ pub fn get_permissions_status(
 
 #[tauri::command]
 pub fn request_permissions(
+    app: tauri::AppHandle,
     state: State<AppState>,
     settings_state: State<SettingsState>,
 ) -> Result<PermissionStatus, String> {
@@ -184,16 +188,27 @@ pub fn request_permissions(
         settings.enable_accessibility,
         settings.enable_input_monitoring,
     );
+    if settings.enable_input_monitoring {
+        if let Some(channel) = app.try_state::<crate::collector::input_bridge::InputChannel>() {
+            crate::collector::input_bridge::sync_input_monitoring(&app, true, &channel.0);
+        }
+    }
     *state.permissions.write().map_err(|e| e.to_string())? = status.clone();
     Ok(filter_permissions_by_settings(status, &settings))
 }
 
 #[tauri::command]
 pub fn refresh_permissions(
+    app: tauri::AppHandle,
     state: State<AppState>,
     settings_state: State<SettingsState>,
 ) -> Result<PermissionStatus, String> {
     let settings = settings_state.0.read().map_err(|e| e.to_string())?;
+    if settings.enable_input_monitoring {
+        if let Some(channel) = app.try_state::<crate::collector::input_bridge::InputChannel>() {
+            crate::collector::input_bridge::sync_input_monitoring(&app, true, &channel.0);
+        }
+    }
     let status = os::check_permissions();
     let filtered = filter_permissions_by_settings(status, &settings);
     *state.permissions.write().map_err(|e| e.to_string())? = filtered.clone();

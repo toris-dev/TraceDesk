@@ -16,17 +16,23 @@ export function parseISO(iso: string): Date {
   return new Date(y, m - 1, d);
 }
 
-export function formatDateKo(iso: string, short = false): string {
+export function formatDate(iso: string, locale: "ko" | "en" = "ko", short = false): string {
   const d = parseISO(iso);
+  const tag = locale === "en" ? "en-US" : "ko-KR";
   if (short) {
-    return d.toLocaleDateString("ko-KR", { month: "short", day: "numeric", weekday: "short" });
+    return d.toLocaleDateString(tag, { month: "short", day: "numeric", weekday: "short" });
   }
-  return d.toLocaleDateString("ko-KR", {
+  return d.toLocaleDateString(tag, {
     year: "numeric",
     month: "long",
     day: "numeric",
     weekday: "long",
   });
+}
+
+/** @deprecated use formatDate(iso, locale) */
+export function formatDateKo(iso: string, short = false): string {
+  return formatDate(iso, "ko", short);
 }
 
 export function addDays(iso: string, delta: number): string {

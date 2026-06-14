@@ -1,4 +1,4 @@
-use chrono::{DateTime, Utc};
+use chrono::{DateTime, Local, Utc};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
@@ -72,7 +72,7 @@ impl ActivityEvent {
         Self {
             id: None,
             event_type,
-            created_at: Utc::now(),
+            created_at: Local::now().with_timezone(&Utc),
             duration: None,
             application: None,
             window_title: None,
@@ -80,7 +80,11 @@ impl ActivityEvent {
         }
     }
 
-    pub fn with_app(mut self, application: impl Into<String>, window_title: Option<String>) -> Self {
+    pub fn with_app(
+        mut self,
+        application: impl Into<String>,
+        window_title: Option<String>,
+    ) -> Self {
         self.application = Some(application.into());
         self.window_title = window_title;
         self

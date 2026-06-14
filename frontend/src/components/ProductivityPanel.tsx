@@ -1,4 +1,5 @@
 import type { ProductivityAnalysis, WeeklyReport } from "../api/client";
+import { useTheme } from "../theme";
 import { TortoiseMascot, scoreToMood } from "./mascot";
 
 const GRADE_COLORS: Record<string, string> = {
@@ -14,7 +15,8 @@ interface Props {
 }
 
 export function ProductivityPanel({ analysis }: Props) {
-  const color = GRADE_COLORS[analysis.grade] ?? "#94a3b8";
+  const { chart } = useTheme();
+  const color = GRADE_COLORS[analysis.grade] ?? chart.axis;
   const circumference = 2 * Math.PI * 54;
   const offset = circumference - (analysis.score / 100) * circumference;
 
@@ -34,7 +36,7 @@ export function ProductivityPanel({ analysis }: Props) {
             </div>
           )}
           <svg className="w-full h-full -rotate-90" viewBox="0 0 120 120">
-            <circle cx="60" cy="60" r="54" fill="none" stroke="#2a2f3d" strokeWidth="10" />
+            <circle cx="60" cy="60" r="54" fill="none" stroke={chart.track} strokeWidth="10" />
             <circle
               cx="60"
               cy="60"

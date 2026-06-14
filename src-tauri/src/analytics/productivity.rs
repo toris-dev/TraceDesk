@@ -1,6 +1,8 @@
-use crate::analytics::summary::{build_hourly_activity, compute_daily_statistics};
+use crate::analytics::summary::{
+    build_hourly_activity_from, compute_daily_statistics_from, DailyStatistics,
+};
 use crate::database::Repository;
-use crate::events::EventType;
+use crate::events::{ActivityEvent, EventType};
 use anyhow::Result;
 use chrono::{Datelike, Local, NaiveDate, Weekday};
 use serde::Serialize;
@@ -24,15 +26,35 @@ pub struct ProductivityAnalysis {
 }
 
 const DISTRACTION_KEYWORDS: &[&str] = &[
-    "youtube", "twitter", "x.com", "instagram", "facebook", "reddit", "tiktok", "netflix",
-    "discord", "slack", "telegram", "kakaotalk", "messages", "mail",
+    "youtube",
+    "twitter",
+    "x.com",
+    "instagram",
+    "facebook",
+    "reddit",
+    "tiktok",
+    "netflix",
+    "discord",
+    "slack",
+    "telegram",
+    "kakaotalk",
+    "messages",
+    "mail",
 ];
 
 pub fn analyze_productivity(repo: &Repository, date: NaiveDate) -> Result<ProductivityAnalysis> {
-    let stats = compute_daily_statistics(repo, date)?;
+    let app_usage = repo.get_application_usage_for_date(date)?;
     let events = repo.get_events_for_date(date)?;
-    let hourly = build_hourly_activity(repo, date)?;
+    let stats = compute_daily_statistics_from(&app_usage, &events);
+    let hourly = build_hourly_activity_from(&events);
+    Ok(analyze_productivity_from(&stats, &events, &hourly))
+}
 
+pub fn analyze_productivity_from(
+    stats: &DailyStatistics,
+    events: &[ActivityEvent],
+    hourly: &[(u32, f64)],
+) -> ProductivityAnalysis {
     let focus_sessions: Vec<i64> = events
         .iter()
         .filter(|e| e.event_type == EventType::WindowFocus)
@@ -58,7 +80,7 @@ pub fn analyze_productivity(repo: &Repository, date: NaiveDate) -> Result<Produc
         0.0
     };
 
-    let focus_window = find_peak_focus_window(&hourly);
+    let focus_window = find_peak_focus_window(hourly);
 
     let score = calculate_score(
         active_ratio,
@@ -69,15 +91,15 @@ pub fn analyze_productivity(repo: &Repository, date: NaiveDate) -> Result<Produc
     );
 
     let recommendations = generate_daily_recommendations(
-        &stats,
+        stats,
         active_ratio,
         avg_session_minutes,
         app_switches,
         focus_window.as_ref(),
-        &events,
+        events,
     );
 
-    Ok(ProductivityAnalysis {
+    ProductivityAnalysis {
         score,
         grade: score_to_grade(score),
         active_ratio,
@@ -85,7 +107,7 @@ pub fn analyze_productivity(repo: &Repository, date: NaiveDate) -> Result<Produc
         app_switches,
         focus_window,
         recommendations,
-    })
+    }
 }
 
 fn find_peak_focus_window(hourly: &[(u32, f64)]) -> Option<FocusWindow> {
@@ -193,15 +215,13 @@ fn generate_daily_recommendations(
 
     if avg_session_minutes < 15 && stats.active > 60 {
         recs.push(
-            "평균 집중 세션이 15분 미만입니다. 알림을 끄고 25분 집중 블록을 시도해 보세요."
-                .into(),
+            "평균 집중 세션이 15분 미만입니다. 알림을 끄고 25분 집중 블록을 시도해 보세요.".into(),
         );
     }
 
     if app_switches > 50 {
         recs.push(
-            "앱 전환이 잦습니다. 집중 작업 시 불필요한 창을 닫아 두면 생산성이 올라갑니다."
-                .into(),
+            "앱 전환이 잦습니다. 집중 작업 시 불필요한 창을 닫아 두면 생산성이 올라갑니다.".into(),
         );
     }
 

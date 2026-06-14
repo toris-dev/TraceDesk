@@ -28,9 +28,7 @@ impl OsMonitor for WindowsMonitor {
     }
 
     fn get_idle_seconds(&self) -> Result<u64> {
-        Ok(UserIdle::get_time()
-            .map(|d| d.as_seconds())
-            .unwrap_or(0))
+        Ok(UserIdle::get_time().map(|d| d.as_seconds()).unwrap_or(0))
     }
 }
 

@@ -51,7 +51,9 @@ pub fn collect_snapshot(sys: &mut System) -> Result<SystemSnapshot> {
     let self_pid = std::process::id();
     sys.refresh_processes(sysinfo::ProcessesToUpdate::All, true);
 
-    let tracedesk = sys.process(Pid::from_u32(self_pid)).map(|p| process_info(self_pid, p));
+    let tracedesk = sys
+        .process(Pid::from_u32(self_pid))
+        .map(|p| process_info(self_pid, p));
 
     let mut processes: Vec<ProcessInfo> = sys
         .processes()

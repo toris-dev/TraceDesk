@@ -47,5 +47,6 @@ impl OsMonitor for MacOsMonitor {
 
 /// 창 추적 API 동작 여부 (권한 UI 진단용)
 pub fn probe_window_tracking() -> bool {
-    active_win_pos_rs::get_active_window().is_ok() || macos_frontmost::frontmost_app_name().is_some()
+    active_win_pos_rs::get_active_window().is_ok()
+        || macos_frontmost::frontmost_app_name().is_some()
 }

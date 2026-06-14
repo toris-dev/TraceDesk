@@ -1,4 +1,6 @@
-use crate::analytics::productivity::{analyze_productivity, today_local, weekday_ko, weekday_short};
+use crate::analytics::productivity::{
+    analyze_productivity, today_local, weekday_ko, weekday_short,
+};
 use crate::database::Repository;
 use anyhow::Result;
 use chrono::{Duration, NaiveDate};
@@ -40,9 +42,10 @@ pub fn build_weekly_report(repo: &Repository, end_date: NaiveDate) -> Result<Wee
         let stats = crate::analytics::summary::compute_daily_statistics(repo, cursor)?;
         let productivity = analyze_productivity(repo, cursor)?;
 
-        let focus_window = productivity.focus_window.as_ref().map(|fw| {
-            format!("{}~{}", fw.start, fw.end)
-        });
+        let focus_window = productivity
+            .focus_window
+            .as_ref()
+            .map(|fw| format!("{}~{}", fw.start, fw.end));
 
         daily.push(DailyReportItem {
             date: cursor.format("%Y-%m-%d").to_string(),
@@ -110,7 +113,11 @@ fn build_focus_pattern_summary(daily: &[DailyReportItem]) -> String {
 
     for day in daily {
         if let Some(ref window) = day.focus_window {
-            if let Some(hour) = window.split(':').next().and_then(|h| h.parse::<usize>().ok()) {
+            if let Some(hour) = window
+                .split(':')
+                .next()
+                .and_then(|h| h.parse::<usize>().ok())
+            {
                 if hour < 24 {
                     hour_counts[hour] += 1;
                     if hour + 1 < 24 {
@@ -168,9 +175,7 @@ fn generate_weekly_recommendations(
         .sum();
 
     if weekday_active > 0 && weekend_active > weekday_active / 2 {
-        recs.push(
-            "주말 활동량이 평일 대비 높습니다. 휴식과 작업의 균형을 점검해 보세요.".into(),
-        );
+        recs.push("주말 활동량이 평일 대비 높습니다. 휴식과 작업의 균형을 점검해 보세요.".into());
     }
 
     if avg_score >= 70 {

@@ -1,15 +1,12 @@
 import {
-  clipboardPreviewText,
-  eventTypeLabel,
   screenshotThumbnailSrc,
   type ActivityItem,
 } from "../api/client";
+import { CopyableClipboardContent } from "./CopyableClipboardContent";
+import { useI18n } from "../i18n";
+import { isActionEvent } from "../utils/activityFeed";
 
-const ACTION_TYPES = new Set(["COPY", "PASTE", "SCREENSHOT"]);
-
-export function isActionEvent(type: string): boolean {
-  return ACTION_TYPES.has(type);
-}
+export { isActionEvent };
 
 interface Props {
   events: ActivityItem[];
@@ -18,6 +15,7 @@ interface Props {
 }
 
 export function ActionHistoryPanel({ events, viewingToday, dateLabel }: Props) {
+  const { t } = useI18n();
   const copyCount = events.filter((e) => e.type === "COPY").length;
   const pasteCount = events.filter((e) => e.type === "PASTE").length;
   const shotCount = events.filter((e) => e.type === "SCREENSHOT").length;
@@ -29,39 +27,38 @@ export function ActionHistoryPanel({ events, viewingToday, dateLabel }: Props) {
     >
       <div className="flex flex-wrap items-start justify-between gap-3 mb-4">
         <div>
-          <h2 className="text-lg font-semibold">복사 · 붙여넣기 · 캡처</h2>
+          <h2 className="text-lg font-semibold text-text">{t("actions.title")}</h2>
           <p className="text-sm text-text-muted mt-1">
-            {dateLabel}에 기록된 행동 내역
+            {t("actions.dateRecorded", { date: dateLabel })}
             {viewingToday && (
-              <span className="inline-flex items-center gap-1 ml-2 text-green-400/90 text-xs uppercase tracking-wide">
-                <span className="size-1.5 rounded-full bg-green-400 animate-pulse" />
-                실시간
+              <span className="inline-flex items-center gap-1 ml-2 text-success-text/90 text-xs uppercase tracking-wide">
+                <span className="size-1.5 rounded-full bg-success animate-pulse" />
+                {t("actions.live")}
               </span>
             )}
           </p>
         </div>
-        <div className="flex gap-3 text-sm">
+        <div className="flex gap-3 text-sm text-text">
           <span>
-            복사 <strong className="text-green-400">{copyCount}</strong>
+            {t("actions.copy")} <strong className="text-success-text">{copyCount}</strong>
           </span>
           <span>
-            붙여넣기 <strong className="text-amber-400">{pasteCount}</strong>
+            {t("actions.paste")} <strong className="text-warning">{pasteCount}</strong>
           </span>
           <span>
-            캡처 <strong className="text-red-400">{shotCount}</strong>
+            {t("actions.capture")} <strong className="text-danger-text">{shotCount}</strong>
           </span>
         </div>
       </div>
 
       {events.length === 0 ? (
         <div className="rounded-lg border border-dashed border-border bg-surface/50 px-4 py-8 text-center">
-          <p className="text-text-muted text-sm">
-            아직 복사·붙여넣기·캡처 기록이 없습니다.
-          </p>
+          <p className="text-text-muted text-sm">{t("actions.empty")}</p>
           <p className="text-text-muted text-xs mt-2">
-            설정에서 <strong className="text-text">입력 모니터링</strong>을 켜고,
-            macOS는 <strong className="text-text">입력 모니터링 권한</strong>을 허용해 주세요.
-            내용 미리보기·캡처 썸네일은 설정에서 각각 켤 수 있습니다.
+            {t("actions.emptyHint", {
+              inputMonitoring: t("actions.inputMonitoring"),
+              inputPermission: t("actions.inputPermission"),
+            })}
           </p>
         </div>
       ) : (
@@ -76,7 +73,7 @@ export function ActionHistoryPanel({ events, viewingToday, dateLabel }: Props) {
 }
 
 function ActionEventRow({ event: ev }: { event: ActivityItem }) {
-  const preview = clipboardPreviewText(ev.metadata);
+  const { t } = useI18n();
   const screenshotSrc =
     ev.type === "SCREENSHOT" ? screenshotThumbnailSrc(ev.metadata) : null;
   const isClipboard = ev.type === "COPY" || ev.type === "PASTE";
@@ -88,19 +85,14 @@ function ActionEventRow({ event: ev }: { event: ActivityItem }) {
         <span
           className={`shrink-0 font-sans font-medium ${
             ev.type === "COPY"
-              ? "text-green-400"
+              ? "text-success-text"
               : ev.type === "PASTE"
-                ? "text-amber-400"
-                : "text-red-400"
+                ? "text-warning"
+                : "text-danger-text"
           }`}
         >
-          {eventTypeLabel(ev.type)}
+          {t(`events.${ev.type}`)}
         </span>
-        {ev.name && (
-          <span className="truncate text-text-muted max-w-[12rem]" title={ev.name}>
-            {ev.name}
-          </span>
-        )}
         {ev.metadata?.shortcut != null && (
           <span className="text-text-muted ml-auto shrink-0 truncate max-w-28">
             {String(ev.metadata.shortcut)}
@@ -111,25 +103,30 @@ function ActionEventRow({ event: ev }: { event: ActivityItem }) {
             {String(ev.metadata.filename)}
           </span>
         )}
-        {isClipboard && ev.metadata?.clipboard_length != null && !preview && (
-          <span className="text-text-muted ml-auto shrink-0">
-            {String(ev.metadata.clipboard_length)}자
-          </span>
-        )}
       </div>
-      {preview && (
-        <p
-          className="mt-1.5 pl-[3.75rem] text-[11px] text-text-muted leading-snug break-all line-clamp-4"
-          title={preview}
-        >
-          {preview}
-        </p>
+
+      {(ev.name || ev.window_title) && (
+        <div className="mt-1.5 pl-[3.75rem] space-y-0.5 text-[11px] leading-snug">
+          {ev.name && (
+            <p className="text-text">
+              {t("actions.inApp", { app: ev.name })}
+            </p>
+          )}
+          {ev.window_title && (
+            <p className="text-text-muted truncate" title={ev.window_title}>
+              {t("actions.inWindow", { title: ev.window_title })}
+            </p>
+          )}
+        </div>
       )}
+
+      {isClipboard && <CopyableClipboardContent metadata={ev.metadata} className="mt-1.5" />}
+
       {screenshotSrc && (
         <img
           src={screenshotSrc}
-          alt="스크린샷 미리보기"
-          className="mt-2 ml-[3.75rem] max-h-36 max-w-full rounded border border-border object-contain bg-black/20"
+          alt={t("actions.screenshotPreview")}
+          className="mt-2 ml-[3.75rem] max-h-36 max-w-full rounded border border-border object-contain bg-image-bg"
         />
       )}
     </div>

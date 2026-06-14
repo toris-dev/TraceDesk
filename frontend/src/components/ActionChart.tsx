@@ -9,18 +9,22 @@ import {
   YAxis,
 } from "recharts";
 import type { ActionHourlyPoint } from "../api/client";
+import { useI18n } from "../i18n";
+import { useTheme } from "../theme";
 
 interface Props {
   data: ActionHourlyPoint[];
 }
 
 export function ActionChart({ data }: Props) {
+  const { t } = useI18n();
+  const { chart } = useTheme();
   const hasData = data.some((d) => d.copy + d.paste + d.screenshot > 0);
 
   if (!hasData) {
     return (
       <div className="flex h-40 items-center justify-center text-text-muted text-sm">
-        복사/붙여넣기/스크린샷 이벤트가 없습니다
+        {t("actions.noChartData")}
       </div>
     );
   }
@@ -35,20 +39,21 @@ export function ActionChart({ data }: Props) {
   return (
     <ResponsiveContainer width="100%" height={200}>
       <BarChart data={chartData}>
-        <CartesianGrid strokeDasharray="3 3" stroke="#2a2f3d" />
-        <XAxis dataKey="hour" stroke="#94a3b8" fontSize={10} interval={3} />
-        <YAxis stroke="#94a3b8" fontSize={11} allowDecimals={false} />
+        <CartesianGrid strokeDasharray="3 3" stroke={chart.grid} />
+        <XAxis dataKey="hour" stroke={chart.axis} fontSize={10} interval={3} />
+        <YAxis stroke={chart.axis} fontSize={11} allowDecimals={false} />
         <Tooltip
           contentStyle={{
-            background: "#1a1d27",
-            border: "1px solid #2a2f3d",
+            background: chart.tooltipBg,
+            border: `1px solid ${chart.tooltipBorder}`,
             borderRadius: 8,
+            color: chart.tooltipText,
           }}
         />
-        <Legend wrapperStyle={{ fontSize: 12 }} />
-        <Bar dataKey="copy" name="복사" fill="#22c55e" stackId="a" radius={[0, 0, 0, 0]} />
-        <Bar dataKey="paste" name="붙여넣기" fill="#f59e0b" stackId="a" />
-        <Bar dataKey="screenshot" name="스크린샷" fill="#ef4444" stackId="a" radius={[4, 4, 0, 0]} />
+        <Legend wrapperStyle={{ fontSize: 12, color: chart.tooltipText }} />
+        <Bar dataKey="copy" name={t("actions.copy")} fill={chart.success} stackId="a" radius={[0, 0, 0, 0]} />
+        <Bar dataKey="paste" name={t("actions.paste")} fill={chart.warning} stackId="a" />
+        <Bar dataKey="screenshot" name={t("events.SCREENSHOT")} fill={chart.danger} stackId="a" radius={[4, 4, 0, 0]} />
       </BarChart>
     </ResponsiveContainer>
   );

@@ -3,7 +3,7 @@ pub mod linux;
 #[cfg(target_os = "macos")]
 pub mod macos;
 #[cfg(target_os = "macos")]
-mod macos_frontmost;
+pub mod macos_frontmost;
 #[cfg(target_os = "windows")]
 pub mod windows;
 

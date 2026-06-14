@@ -29,11 +29,41 @@ pub struct AppSettings {
     /// 스크린샷 썸네일 저장 (기본 OFF)
     #[serde(default)]
     pub store_screenshot_preview: bool,
+    /// UI language (`ko` or `en`)
+    #[serde(default = "default_locale")]
+    pub locale: String,
+    /// UI theme (`dark` or `light`)
+    #[serde(default = "default_theme")]
+    pub theme: String,
     /// 초기 설정 마법사 완료 여부
     #[serde(default)]
     pub setup_completed: bool,
     #[serde(default)]
     pub first_run_completed: bool,
+}
+
+fn default_locale() -> String {
+    "ko".into()
+}
+
+pub fn normalize_locale(value: &str) -> String {
+    if value == "en" {
+        "en".into()
+    } else {
+        "ko".into()
+    }
+}
+
+fn default_theme() -> String {
+    "dark".into()
+}
+
+pub fn normalize_theme(value: &str) -> String {
+    if value == "light" {
+        "light".into()
+    } else {
+        "dark".into()
+    }
 }
 
 impl Default for AppSettings {
@@ -44,8 +74,10 @@ impl Default for AppSettings {
             last_archive_at: None,
             enable_accessibility: false,
             enable_input_monitoring: false,
-            store_clipboard_preview: false,
+            store_clipboard_preview: true,
             store_screenshot_preview: false,
+            locale: default_locale(),
+            theme: default_theme(),
             setup_completed: false,
             first_run_completed: false,
         }

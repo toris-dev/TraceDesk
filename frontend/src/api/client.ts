@@ -3,6 +3,13 @@ import { listen, type UnlistenFn } from "@tauri-apps/api/event";
 
 export const ACTIVITY_EVENT = "activity-event";
 
+export const MENU_NAVIGATE = "menu-navigate";
+export const MENU_REFRESH = "menu-refresh-ui";
+export const MENU_GO_TODAY = "menu-go-today-ui";
+export const MENU_EXPORT_DONE = "menu-export-done";
+export const MENU_ERROR = "menu-error";
+export const MENU_CHECK_UPDATE = "menu-check-update-ui";
+
 export interface DailyStatistics {
   active: number;
   idle: number;
@@ -17,6 +24,7 @@ export interface ActivityItem {
   type: string;
   time: string;
   name?: string;
+  window_title?: string;
   duration?: number;
   metadata?: Record<string, unknown>;
 }
@@ -164,12 +172,49 @@ async function invokeCmd<T>(cmd: string, args?: Record<string, unknown>): Promis
   return invoke<T>(cmd, args);
 }
 
+export function getActivityBundle(date?: string) {
+  return invokeCmd<ActivityBundle>("get_activity_bundle", { date: date ?? null });
+}
+
+export interface ActivityBundle {
+  stats: DailyStatistics;
+  applications: ApplicationUsage[];
+  timeline: FullTimelineItem[];
+  idle: IdleAnalysis;
+  action_hourly: ActionHourlyPoint[];
+  hourly: HourlyActivity[];
+  events: ActivityItem[];
+  productivity: ProductivityAnalysis;
+  weekly: WeeklyReport;
+}
+
 export function getDailyStatistics(date?: string) {
   return invokeCmd<DailyStatistics>("get_daily_statistics", { date: date ?? null });
 }
 
 export function getActivityToday(date?: string) {
   return invokeCmd<ActivityItem[]>("get_activity_today", { date: date ?? null });
+}
+
+export type ExportScope = "all" | "journal" | "actions";
+export type ExportFormat = "json" | "csv";
+
+export interface ExportResult {
+  saved: boolean;
+  path: string | null;
+  row_count: number;
+}
+
+export function exportActivity(opts: {
+  date?: string;
+  scope: ExportScope;
+  format: ExportFormat;
+}) {
+  return invokeCmd<ExportResult>("export_activity", {
+    date: opts.date ?? null,
+    scope: opts.scope,
+    format: opts.format,
+  });
 }
 
 export function getTimeline(date?: string) {
@@ -238,6 +283,8 @@ export interface AppSettings {
   enable_input_monitoring: boolean;
   store_clipboard_preview: boolean;
   store_screenshot_preview: boolean;
+  locale: string;
+  theme: string;
   setup_completed: boolean;
   first_run_completed: boolean;
 }
@@ -279,6 +326,8 @@ export function updateSettings(opts: {
   enableInputMonitoring?: boolean;
   storeClipboardPreview?: boolean;
   storeScreenshotPreview?: boolean;
+  locale?: string;
+  theme?: string;
 }) {
   return invokeCmd<AppSettings>("update_settings", {
     autostartEnabled: opts.autostartEnabled ?? null,
@@ -287,6 +336,8 @@ export function updateSettings(opts: {
     enableInputMonitoring: opts.enableInputMonitoring ?? null,
     storeClipboardPreview: opts.storeClipboardPreview ?? null,
     storeScreenshotPreview: opts.storeScreenshotPreview ?? null,
+    locale: opts.locale ?? null,
+    theme: opts.theme ?? null,
   });
 }
 
@@ -299,11 +350,13 @@ export function completeSetup(opts: {
   autostartEnabled: boolean;
   enableAccessibility: boolean;
   enableInputMonitoring: boolean;
+  locale?: string;
 }) {
   return invokeCmd<SetupResult>("complete_setup", {
     autostartEnabled: opts.autostartEnabled,
     enableAccessibility: opts.enableAccessibility,
     enableInputMonitoring: opts.enableInputMonitoring,
+    locale: opts.locale ?? null,
   });
 }
 
@@ -353,7 +406,11 @@ export function formatSeconds(seconds: number): string {
   return `${h}h ${m}m`;
 }
 
-export function eventTypeLabel(type: string): string {
+export function eventTypeLabel(type: string, t?: (key: string) => string): string {
+  if (t) {
+    const translated = t(`events.${type}`);
+    if (translated !== `events.${type}`) return translated;
+  }
   const labels: Record<string, string> = {
     SYSTEM_START: "시스템 시작",
     SYSTEM_SHUTDOWN: "시스템 종료",
@@ -373,15 +430,80 @@ export function subscribeActivityEvents(
   return listen<ActivityItem>(ACTIVITY_EVENT, (event) => handler(event.payload));
 }
 
+export function subscribeMenuEvents(handlers: {
+  onNavigate?: (page: string) => void;
+  onRefresh?: () => void;
+  onGoToday?: () => void;
+  onExportDone?: (result: ExportResult) => void;
+  onError?: (message: string) => void;
+  onCheckUpdate?: () => void;
+}): Promise<UnlistenFn> {
+  const unsubs: UnlistenFn[] = [];
+
+  return Promise.all([
+    handlers.onNavigate
+      ? listen<string>(MENU_NAVIGATE, (e) => handlers.onNavigate!(e.payload))
+      : Promise.resolve(() => {}),
+    handlers.onRefresh
+      ? listen(MENU_REFRESH, () => handlers.onRefresh!())
+      : Promise.resolve(() => {}),
+    handlers.onGoToday
+      ? listen(MENU_GO_TODAY, () => handlers.onGoToday!())
+      : Promise.resolve(() => {}),
+    handlers.onExportDone
+      ? listen<ExportResult>(MENU_EXPORT_DONE, (e) => handlers.onExportDone!(e.payload))
+      : Promise.resolve(() => {}),
+    handlers.onError
+      ? listen<string>(MENU_ERROR, (e) => handlers.onError!(e.payload))
+      : Promise.resolve(() => {}),
+    handlers.onCheckUpdate
+      ? listen(MENU_CHECK_UPDATE, () => handlers.onCheckUpdate!())
+      : Promise.resolve(() => {}),
+  ]).then((fns) => {
+    unsubs.push(...fns);
+    return () => {
+      for (const fn of unsubs) fn();
+    };
+  });
+}
+
+export function clipboardCopyText(metadata?: Record<string, unknown>): string | null {
+  if (!metadata || typeof metadata.clipboard_preview !== "string") return null;
+  const text = metadata.clipboard_preview;
+  return text.length > 0 ? text : null;
+}
+
 export function clipboardPreviewText(
   metadata?: Record<string, unknown>,
+  imageLabel = "(클립보드 이미지)",
 ): string | null {
   if (!metadata) return null;
   if (typeof metadata.clipboard_preview === "string") {
     const text = metadata.clipboard_preview;
     return metadata.clipboard_truncated ? `${text}…` : text;
   }
-  if (metadata.content_type === "image") return "(클립보드 이미지)";
+  if (metadata.content_type === "image") return imageLabel;
+  return null;
+}
+
+export function clipboardContentSummary(
+  metadata: Record<string, unknown> | undefined,
+  t: (key: string, params?: Record<string, string | number>) => string,
+): string | null {
+  const preview = clipboardPreviewText(metadata, t("actions.clipboardImage"));
+  if (preview) return preview;
+
+  if (!metadata) return null;
+  const length = metadata.clipboard_length;
+  if (metadata.content_type === "text" && typeof length === "number" && length > 0) {
+    return t("actions.textLengthOnly", { count: length });
+  }
+  if (metadata.content_type === "image") {
+    return t("actions.clipboardImage");
+  }
+  if (metadata.content_type === "empty") {
+    return t("actions.clipboardEmpty");
+  }
   return null;
 }
 

@@ -1,56 +1,119 @@
-import { useCallback, useEffect, useState } from "react";
+import { lazy, Suspense, useCallback, useEffect, useMemo, useState } from "react";
 import {
-  getActionHourly,
-  getActivityToday,
-  getApplications,
+  getActivityBundle,
   getAvailableDates,
-  getDailyStatistics,
-  getHourlyActivity,
-  getIdleAnalysis,
-  getProductivityAnalysis,
-  getTimelineFull,
-  getWeeklyReport,
   getSettings,
   subscribeActivityEvents,
+  subscribeMenuEvents,
   upsertActivityEvent,
-  type ActionHourlyPoint,
   type ActivityItem,
-  type ApplicationUsage,
   type AppSettings,
   type DailyStatistics,
+  type ExportResult,
   type FullTimelineItem,
+  type ActionHourlyPoint,
+  type ApplicationUsage,
   type HourlyActivity,
   type IdleAnalysis,
   type ProductivityAnalysis,
   type WeeklyReport,
 } from "./api/client";
 import { ActionHistoryPanel, isActionEvent } from "./components/ActionHistoryPanel";
-import { ActionChart } from "./components/ActionChart";
-import { ActivityGraph } from "./components/ActivityGraph";
-import { AppUsageChart } from "./components/AppUsageChart";
-import { DateSelector } from "./components/DateSelector";
+import { ActivityToolbar } from "./components/ActivityToolbar";
 import { PermissionBanner } from "./components/PermissionBanner";
-import { ProductivityPanel, WeeklyReportPanel } from "./components/ProductivityPanel";
-import { IdleAnalysisPanel, TimelineGantt } from "./components/TimelineGantt";
+import { TimelineGantt } from "./components/TimelineGantt";
 import { TimelineView } from "./components/TimelineView";
-import { SystemMonitor } from "./components/SystemMonitor";
 import { SettingsPanel } from "./components/SettingsPanel";
 import { MascotAssistant } from "./components/MascotAssistant";
 import { MascotScene } from "./components/mascot";
 import { SetupWizard } from "./components/SetupWizard";
+import { ThemeToggle } from "./components/ThemeToggle";
 import {
   DashboardLayout,
   isActivityPage,
+  isDashboardPage,
   type DashboardPage,
 } from "./layout/DashboardLayout";
 import { OverviewView } from "./views/OverviewView";
-import { formatDateKo, isToday, todayISO } from "./utils/date";
+import { ActivityJournalView } from "./views/ActivityJournalView";
+import { I18nProvider, normalizeLocale, useI18n, type Locale } from "./i18n";
+import { ThemeProvider, normalizeTheme, type Theme } from "./theme";
+import { formatDate, isToday, todayISO } from "./utils/date";
+import { filterJournalEvents, isJournalEvent } from "./utils/activityFeed";
 
-const REFRESH_INTERVAL = 30_000;
+const AnalyticsView = lazy(() =>
+  import("./views/AnalyticsView").then((m) => ({ default: m.AnalyticsView })),
+);
+const SystemMonitor = lazy(() =>
+  import("./components/SystemMonitor").then((m) => ({ default: m.SystemMonitor })),
+);
+
+const REFRESH_INTERVAL = 60_000;
+
+function initialLocale(): Locale {
+  if (typeof navigator !== "undefined" && navigator.language.toLowerCase().startsWith("ko")) {
+    return "ko";
+  }
+  return "en";
+}
 
 export default function App() {
+  const [booting, setBooting] = useState(true);
+  const [locale, setLocale] = useState<Locale>(initialLocale);
+  const [theme, setTheme] = useState<Theme>("dark");
   const [appSettings, setAppSettings] = useState<AppSettings | null>(null);
-  const [page, setPage] = useState<DashboardPage>("overview");
+
+  useEffect(() => {
+    getSettings()
+      .then((s) => {
+        setLocale(normalizeLocale(s.locale));
+        setTheme(normalizeTheme(s.theme));
+        setAppSettings(s);
+      })
+      .catch(() => setAppSettings(null))
+      .finally(() => setBooting(false));
+  }, []);
+
+  if (booting || appSettings === null) {
+    return (
+      <ThemeProvider theme={theme} setTheme={setTheme}>
+        <I18nProvider locale={locale} setLocale={setLocale}>
+          <MascotScene
+            mood="loading"
+            title={locale === "en" ? "Starting TraceDesk" : "TraceDesk 시작 중"}
+            description={locale === "en" ? "Getting things ready…" : "거북이가 준비하고 있어요..."}
+            size="xl"
+          />
+        </I18nProvider>
+      </ThemeProvider>
+    );
+  }
+
+  return (
+    <ThemeProvider theme={theme} setTheme={setTheme}>
+      <I18nProvider locale={locale} setLocale={setLocale}>
+        <AppContent
+          appSettings={appSettings}
+          onSettingsChange={(s) => {
+            setAppSettings(s);
+            setLocale(normalizeLocale(s.locale));
+            setTheme(normalizeTheme(s.theme));
+          }}
+        />
+      </I18nProvider>
+    </ThemeProvider>
+  );
+}
+
+function AppContent({
+  appSettings,
+  onSettingsChange,
+}: {
+  appSettings: AppSettings;
+  onSettingsChange: (settings: AppSettings) => void;
+}) {
+  const { locale, t } = useI18n();
+  const [page, setPage] = useState<DashboardPage>("journal");
   const [selectedDate, setSelectedDate] = useState(todayISO);
   const [availableDates, setAvailableDates] = useState<string[]>([]);
   const [stats, setStats] = useState<DailyStatistics | null>(null);
@@ -60,18 +123,15 @@ export default function App() {
   const [actionHourly, setActionHourly] = useState<ActionHourlyPoint[]>([]);
   const [hourly, setHourly] = useState<HourlyActivity[]>([]);
   const [actionEvents, setActionEvents] = useState<ActivityItem[]>([]);
+  const [activityEvents, setActivityEvents] = useState<ActivityItem[]>([]);
+  const [selectedHour, setSelectedHour] = useState<number | null>(null);
   const [productivity, setProductivity] = useState<ProductivityAnalysis | null>(null);
   const [weeklyReport, setWeeklyReport] = useState<WeeklyReport | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [connected, setConnected] = useState(true);
   const [timelineMode, setTimelineMode] = useState<"gantt" | "list">("gantt");
-
-  useEffect(() => {
-    getSettings()
-      .then(setAppSettings)
-      .catch(() => setAppSettings(null));
-  }, []);
+  const [exportNotice, setExportNotice] = useState<string | null>(null);
 
   const loadAvailableDates = useCallback(async () => {
     try {
@@ -82,72 +142,89 @@ export default function App() {
     }
   }, []);
 
-  const loadData = useCallback(async (date: string) => {
-    setLoading(true);
-    try {
-      const [
-        statsData,
-        appsData,
-        timelineData,
-        idleData,
-        actionsData,
-        hourlyData,
-        eventsData,
-        productivityData,
-        weeklyData,
-      ] = await Promise.all([
-        getDailyStatistics(date),
-        getApplications(date),
-        getTimelineFull(date),
-        getIdleAnalysis(date),
-        getActionHourly(date),
-        getHourlyActivity(date),
-        getActivityToday(date),
-        getProductivityAnalysis(date),
-        getWeeklyReport(date),
-      ]);
+  const loadData = useCallback(
+    async (date: string, silent = false) => {
+      if (!silent) setLoading(true);
+      try {
+        const bundle = await getActivityBundle(date);
 
-      setStats(statsData);
-      setApplications(appsData.applications);
-      setFullTimeline(timelineData.items);
-      setIdleAnalysis(idleData);
-      setActionHourly(actionsData.hourly);
-      setHourly(hourlyData.hourly);
-      setActionEvents(
-        eventsData
-          .filter((e) => isActionEvent(e.type))
-          .slice(-50)
-          .reverse(),
-      );
-      setProductivity(productivityData);
-      setWeeklyReport(weeklyData);
-      setConnected(true);
-      setError(null);
-    } catch (e) {
-      setConnected(false);
-      setError(
-        typeof e === "string"
-          ? e
-          : "TraceDesk 데이터를 불러올 수 없습니다.",
-      );
-    } finally {
-      setLoading(false);
-    }
-  }, []);
+        setStats(bundle.stats);
+        setApplications(bundle.applications);
+        setFullTimeline(bundle.timeline);
+        setIdleAnalysis(bundle.idle);
+        setActionHourly(bundle.action_hourly);
+        setHourly(bundle.hourly);
+        setActionEvents(
+          bundle.events
+            .filter((e) => isActionEvent(e.type))
+            .slice(-50)
+            .reverse(),
+        );
+        setActivityEvents(filterJournalEvents(bundle.events));
+        setProductivity(bundle.productivity);
+        setWeeklyReport(bundle.weekly);
+        setConnected(true);
+        setError(null);
+      } catch (e) {
+        setConnected(false);
+        setError(typeof e === "string" ? e : t("app.loadErrorDefault"));
+      } finally {
+        if (!silent) setLoading(false);
+      }
+    },
+    [t],
+  );
+
+  const handleExportDone = useCallback(
+    (result: ExportResult) => {
+      if (!result.saved) return;
+      const name = result.path?.split(/[/\\]/).pop() ?? "file";
+      setExportNotice(t("app.exportSaved", { name, count: result.row_count }));
+      window.setTimeout(() => setExportNotice(null), 4000);
+    },
+    [t],
+  );
 
   useEffect(() => {
     loadAvailableDates();
   }, [loadAvailableDates]);
 
   useEffect(() => {
+    let unlisten: (() => void) | undefined;
+    subscribeMenuEvents({
+      onNavigate: (p) => {
+        if (isDashboardPage(p)) setPage(p);
+      },
+      onRefresh: () => {
+        if (isActivityPage(page)) loadData(selectedDate);
+      },
+      onGoToday: () => {
+        setSelectedDate(todayISO());
+        setPage("journal");
+      },
+      onExportDone: handleExportDone,
+      onError: (message) => setExportNotice(message),
+    })
+      .then((fn) => {
+        unlisten = fn;
+      })
+      .catch(() => {});
+
+    return () => {
+      unlisten?.();
+    };
+  }, [page, selectedDate, loadData, handleExportDone]);
+
+  useEffect(() => {
     if (!isActivityPage(page)) return;
     loadData(selectedDate);
+    setSelectedHour(null);
   }, [selectedDate, page, loadData]);
 
   useEffect(() => {
     if (!isActivityPage(page) || !isToday(selectedDate)) return;
     const id = setInterval(() => {
-      loadData(selectedDate);
+      loadData(selectedDate, true);
       loadAvailableDates();
     }, REFRESH_INTERVAL);
     return () => clearInterval(id);
@@ -158,6 +235,13 @@ export default function App() {
 
     let unlisten: (() => void) | undefined;
     subscribeActivityEvents((item) => {
+      if (!isJournalEvent(item.type) && !isActionEvent(item.type)) return;
+      if (isJournalEvent(item.type)) {
+        setActivityEvents((prev) => {
+          const result = upsertActivityEvent(prev, item);
+          return result.events.slice(0, 200);
+        });
+      }
       if (!isActionEvent(item.type)) return;
       let isNew = false;
       setActionEvents((prev) => {
@@ -185,7 +269,9 @@ export default function App() {
   }, [page, selectedDate]);
 
   const viewingToday = isToday(selectedDate);
-  const dateLabel = viewingToday ? "오늘" : formatDateKo(selectedDate, true);
+  const dateLabel = viewingToday
+    ? t("common.today")
+    : formatDate(selectedDate, locale, true);
   const hasActivity =
     stats &&
     (stats.active > 0 ||
@@ -195,34 +281,28 @@ export default function App() {
       applications.length > 0 ||
       actionEvents.length > 0);
 
-  const listSegments = fullTimeline
-    .filter((i) => i.kind === "app" && i.duration)
-    .map((i) => ({
-      application: i.label,
-      start: i.start,
-      end: i.end ?? i.start,
-      duration: i.duration ?? 0,
-    }));
+  const listSegments = useMemo(
+    () =>
+      fullTimeline
+        .filter((i) => i.kind === "app" && i.duration)
+        .map((i) => ({
+          application: i.label,
+          start: i.start,
+          end: i.end ?? i.start,
+          duration: i.duration ?? 0,
+        })),
+    [fullTimeline],
+  );
 
   const mascotTab =
     page === "system" ? "system" : page === "settings" ? "settings" : "activity";
 
-  if (appSettings === null) {
-    return (
-      <MascotScene
-        mood="loading"
-        title="TraceDesk 시작 중"
-        description="거북이가 준비하고 있어요..."
-        size="xl"
-      />
-    );
-  }
-
   const activityToolbar = isActivityPage(page) ? (
-    <DateSelector
+    <ActivityToolbar
       selectedDate={selectedDate}
       onChange={setSelectedDate}
       availableDates={availableDates}
+      onExportDone={handleExportDone}
     />
   ) : undefined;
 
@@ -231,18 +311,18 @@ export default function App() {
       return (
         <MascotScene
           mood="loading"
-          title="활동 데이터 불러오는 중"
-          description="오늘의 기록을 정리하고 있어요"
+          title={t("app.loadingActivity")}
+          description={t("app.loadingActivityDesc")}
         />
       );
     }
 
     if (error) {
       return (
-        <div className="rounded-2xl border border-red-500/30 bg-red-500/10 p-8">
+        <div className="rounded-2xl border border-danger/30 bg-danger/10 p-8">
           <MascotScene
             mood="confused"
-            title="데이터를 불러오지 못했어요"
+            title={t("app.loadError")}
             description={error}
             size="md"
           />
@@ -258,16 +338,18 @@ export default function App() {
           <div className="rounded-2xl border border-border bg-surface-elevated overflow-hidden">
             <MascotScene
               mood="sleeping"
-              title={`${formatDateKo(selectedDate)} — 기록 없음`}
-              description="TraceDesk가 실행 중일 때 활동이 기록됩니다. 설정에서 입력 모니터링을 확인하세요."
+              title={t("app.noRecordTitle", {
+                date: formatDate(selectedDate, locale),
+              })}
+              description={t("app.noRecordDesc")}
               action={
                 !viewingToday ? (
                   <button
                     type="button"
                     onClick={() => setSelectedDate(todayISO())}
-                    className="text-sm px-4 py-2 rounded-lg bg-accent text-white hover:bg-accent/90"
+                    className="text-sm px-4 py-2 rounded-lg bg-accent text-accent-foreground hover:bg-accent/90"
                   >
-                    오늘로 이동
+                    {t("app.goToday")}
                   </button>
                 ) : undefined
               }
@@ -283,6 +365,19 @@ export default function App() {
     }
 
     switch (page) {
+      case "journal":
+        return (
+          <ActivityJournalView
+            stats={stats}
+            activityEvents={activityEvents}
+            fullTimeline={fullTimeline}
+            dateLabel={dateLabel}
+            viewingToday={viewingToday}
+            selectedHour={selectedHour}
+            onHourSelect={setSelectedHour}
+          />
+        );
+
       case "overview":
         return (
           <OverviewView
@@ -314,28 +409,35 @@ export default function App() {
           <section className="rounded-2xl border border-border bg-surface-elevated p-6 max-w-[1400px]">
             <div className="flex flex-wrap items-center justify-between gap-3 mb-6">
               <div>
-                <h3 className="text-lg font-semibold">타임라인</h3>
-                <p className="text-sm text-text-muted">{dateLabel} 앱 사용 · 행동 마커</p>
+                <h3 className="text-lg font-semibold">{t("app.timelineTitle")}</h3>
+                <p className="text-sm text-text-muted">
+                  {t("app.timelineSubtitle", { date: dateLabel })}
+                </p>
               </div>
               <div className="flex rounded-xl border border-border overflow-hidden text-sm">
                 <button
                   type="button"
                   onClick={() => setTimelineMode("gantt")}
-                  className={`px-4 py-2 ${timelineMode === "gantt" ? "bg-accent text-white" : "text-text-muted hover:bg-surface"}`}
+                  className={`px-4 py-2 ${timelineMode === "gantt" ? "bg-accent text-accent-foreground" : "text-text-muted hover:bg-surface"}`}
                 >
-                  Gantt
+                  {t("app.gantt")}
                 </button>
                 <button
                   type="button"
                   onClick={() => setTimelineMode("list")}
-                  className={`px-4 py-2 ${timelineMode === "list" ? "bg-accent text-white" : "text-text-muted hover:bg-surface"}`}
+                  className={`px-4 py-2 ${timelineMode === "list" ? "bg-accent text-accent-foreground" : "text-text-muted hover:bg-surface"}`}
                 >
-                  목록
+                  {t("app.list")}
                 </button>
               </div>
             </div>
             {timelineMode === "gantt" ? (
-              <TimelineGantt items={fullTimeline} />
+              <TimelineGantt
+                items={fullTimeline}
+                selectedHour={selectedHour}
+                onHourSelect={setSelectedHour}
+                interactive
+              />
             ) : (
               <TimelineView segments={listSegments} />
             )}
@@ -344,38 +446,20 @@ export default function App() {
 
       case "analytics":
         return (
-          <div className="space-y-6 max-w-[1400px]">
-            <div className="grid lg:grid-cols-2 gap-6">
-              <section className="rounded-2xl border border-border bg-surface-elevated p-6">
-                <h3 className="text-lg font-semibold mb-4">생산성 분석</h3>
-                {productivity && <ProductivityPanel analysis={productivity} />}
-              </section>
-              <section className="rounded-2xl border border-border bg-surface-elevated p-6">
-                <h3 className="text-lg font-semibold mb-4">주간 리포트</h3>
-                {weeklyReport && <WeeklyReportPanel report={weeklyReport} />}
-              </section>
-            </div>
-            <div className="grid lg:grid-cols-2 gap-6">
-              <section className="rounded-2xl border border-border bg-surface-elevated p-6">
-                <h3 className="text-lg font-semibold mb-4">시간별 집중도</h3>
-                <ActivityGraph data={hourly} />
-              </section>
-              <section className="rounded-2xl border border-border bg-surface-elevated p-6">
-                <h3 className="text-lg font-semibold mb-4">시간별 행동</h3>
-                <ActionChart data={actionHourly} />
-              </section>
-            </div>
-            <div className="grid lg:grid-cols-2 gap-6">
-              <section className="rounded-2xl border border-border bg-surface-elevated p-6">
-                <h3 className="text-lg font-semibold mb-4">앱 사용 통계</h3>
-                <AppUsageChart data={applications} />
-              </section>
-              <section className="rounded-2xl border border-border bg-surface-elevated p-6">
-                <h3 className="text-lg font-semibold mb-4">유휴 분석</h3>
-                {idleAnalysis && <IdleAnalysisPanel analysis={idleAnalysis} />}
-              </section>
-            </div>
-          </div>
+          <Suspense
+            fallback={
+              <MascotScene mood="loading" title={t("app.loadingAnalytics")} size="md" />
+            }
+          >
+            <AnalyticsView
+              productivity={productivity}
+              weeklyReport={weeklyReport}
+              hourly={hourly}
+              actionHourly={actionHourly}
+              applications={applications}
+              idleAnalysis={idleAnalysis}
+            />
+          </Suspense>
         );
 
       default:
@@ -386,24 +470,48 @@ export default function App() {
   return (
     <>
       {!appSettings.setup_completed && (
-        <SetupWizard onComplete={setAppSettings} />
+        <SetupWizard
+          onComplete={(s) => {
+            onSettingsChange(s);
+          }}
+        />
       )}
 
       <DashboardLayout
         page={page}
         onPageChange={setPage}
         connected={connected}
-        subtitle={isActivityPage(page) ? formatDateKo(selectedDate) : formatDateKo(todayISO())}
+        subtitle={
+          isActivityPage(page)
+            ? formatDate(selectedDate, locale)
+            : formatDate(todayISO(), locale)
+        }
         actionBadge={stats ? stats.copy + stats.paste + stats.screenshot : actionEvents.length}
         toolbar={activityToolbar}
+        themeToggle={
+          <ThemeToggle
+            onSettingsChange={onSettingsChange}
+            disabled={loading && isActivityPage(page)}
+          />
+        }
         onRefresh={isActivityPage(page) ? () => loadData(selectedDate) : undefined}
         refreshing={loading}
       >
         <PermissionBanner />
 
-        {page === "system" && <SystemMonitor connected={connected && !error} />}
+        {exportNotice && (
+          <div className="mb-4 rounded-lg border border-success/30 bg-success/10 px-4 py-2 text-sm text-success-text">
+            {exportNotice}
+          </div>
+        )}
 
-        {page === "settings" && <SettingsPanel />}
+        {page === "system" && (
+          <Suspense fallback={<MascotScene mood="loading" title={t("app.loadingSystem")} size="md" />}>
+            <SystemMonitor connected={connected && !error} />
+          </Suspense>
+        )}
+
+        {page === "settings" && <SettingsPanel onSettingsChange={onSettingsChange} />}
 
         {isActivityPage(page) && renderActivityContent()}
       </DashboardLayout>

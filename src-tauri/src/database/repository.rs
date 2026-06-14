@@ -2,7 +2,7 @@ use crate::database::models::{ApplicationUsage, DailySummary};
 use crate::database::Database;
 use crate::events::ActivityEvent;
 use anyhow::{Context, Result};
-use chrono::{DateTime, NaiveDate, Utc};
+use chrono::{Local, NaiveDate, NaiveDateTime, TimeZone, Utc};
 use rusqlite::params;
 
 pub struct Repository {
@@ -21,7 +21,7 @@ impl Repository {
                  VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
                 params![
                     event.event_type.as_str(),
-                    event.created_at.format("%Y-%m-%d %H:%M:%S").to_string(),
+                    Local::now().format("%Y-%m-%d %H:%M:%S").to_string(),
                     event.duration,
                     event.application,
                     event.window_title,
@@ -56,7 +56,8 @@ impl Repository {
     }
 
     pub fn update_event_metadata(&self, id: i64, metadata: &serde_json::Value) -> Result<()> {
-        let metadata_json = serde_json::to_string(metadata).context("failed to serialize metadata")?;
+        let metadata_json =
+            serde_json::to_string(metadata).context("failed to serialize metadata")?;
         self.db.with_connection(|conn| {
             conn.execute(
                 "UPDATE activity_events SET metadata = ?1 WHERE id = ?2",
@@ -68,18 +69,19 @@ impl Repository {
     }
 
     pub fn get_events_for_date(&self, date: NaiveDate) -> Result<Vec<ActivityEvent>> {
-        let date_str = date.format("%Y-%m-%d").to_string();
+        let start = date.format("%Y-%m-%d 00:00:00").to_string();
+        let end = (date + chrono::Duration::days(1))
+            .format("%Y-%m-%d 00:00:00")
+            .to_string();
         self.db.with_connection(|conn| {
             let mut stmt = conn.prepare(
                 "SELECT id, event_type, created_at, duration, application, window_title, metadata
                  FROM activity_events
-                 WHERE date(created_at) = date(?1)
+                 WHERE created_at >= ?1 AND created_at < ?2
                  ORDER BY created_at ASC",
             )?;
 
-            let rows = stmt.query_map(params![date_str], |row| {
-                row_to_activity_event(row)
-            })?;
+            let rows = stmt.query_map(params![start, end], |row| row_to_activity_event(row))?;
 
             rows.collect::<Result<Vec<_>, _>>()
                 .context("failed to read activity events")
@@ -154,23 +156,6 @@ impl Repository {
         })
     }
 
-    pub fn count_events_by_type_for_date(
-        &self,
-        date: NaiveDate,
-        event_type: &str,
-    ) -> Result<i64> {
-        let date_str = date.format("%Y-%m-%d").to_string();
-        self.db.with_connection(|conn| {
-            let count: i64 = conn.query_row(
-                "SELECT COUNT(*) FROM activity_events
-                 WHERE date(created_at) = date(?1) AND event_type = ?2",
-                params![date_str, event_type],
-                |row| row.get(0),
-            )?;
-            Ok(count)
-        })
-    }
-
     pub fn get_available_dates(&self) -> Result<Vec<(String, i64)>> {
         self.db.with_connection(|conn| {
             let mut stmt = conn.prepare(
@@ -182,7 +167,8 @@ impl Repository {
             let rows = stmt.query_map([], |row| {
                 Ok((row.get::<_, String>(0)?, row.get::<_, i64>(1)?))
             })?;
-            rows.collect::<Result<Vec<_>, _>>().context("failed to read available dates")
+            rows.collect::<Result<Vec<_>, _>>()
+                .context("failed to read available dates")
         })
     }
 }
@@ -196,12 +182,11 @@ fn row_to_activity_event(row: &rusqlite::Row<'_>) -> rusqlite::Result<ActivityEv
         id: Some(row.get(0)?),
         event_type: crate::events::EventType::from_str(&event_type_str)
             .unwrap_or(crate::events::EventType::WindowFocus),
-        created_at: DateTime::parse_from_str(
-            &format!("{} +0000", created_at_str),
-            "%Y-%m-%d %H:%M:%S %z",
-        )
-        .map(|dt| dt.with_timezone(&Utc))
-        .unwrap_or_else(|_| Utc::now()),
+        created_at: NaiveDateTime::parse_from_str(&created_at_str, "%Y-%m-%d %H:%M:%S")
+            .ok()
+            .and_then(|naive| Local.from_local_datetime(&naive).single())
+            .map(|dt| dt.with_timezone(&Utc))
+            .unwrap_or_else(Utc::now),
         duration: row.get(3)?,
         application: row.get(4)?,
         window_title: row.get(5)?,

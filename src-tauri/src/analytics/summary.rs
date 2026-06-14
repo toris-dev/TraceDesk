@@ -71,31 +71,51 @@ pub fn refresh_daily_summary(repo: &Repository) -> Result<()> {
 
 pub fn compute_daily_statistics(repo: &Repository, date: NaiveDate) -> Result<DailyStatistics> {
     let app_usage = repo.get_application_usage_for_date(date)?;
+    let events = repo.get_events_for_date(date)?;
+    Ok(compute_daily_statistics_from(&app_usage, &events))
+}
+
+pub fn compute_daily_statistics_from(
+    app_usage: &[crate::database::models::ApplicationUsage],
+    events: &[crate::events::ActivityEvent],
+) -> DailyStatistics {
     let active_seconds: i64 = app_usage.iter().map(|a| a.duration).sum();
     let active_minutes = active_seconds / 60;
 
-    let idle_analysis = build_idle_analysis(repo, date)?;
+    let idle_analysis = build_idle_analysis_from(events);
     let idle_minutes = idle_analysis.total_idle_minutes;
 
-    let copy = repo.count_events_by_type_for_date(date, EventType::Copy.as_str())?;
-    let paste = repo.count_events_by_type_for_date(date, EventType::Paste.as_str())?;
-    let screenshot = repo.count_events_by_type_for_date(date, EventType::Screenshot.as_str())?;
+    let mut copy = 0i64;
+    let mut paste = 0i64;
+    let mut screenshot = 0i64;
+    for event in events {
+        match event.event_type {
+            EventType::Copy => copy += 1,
+            EventType::Paste => paste += 1,
+            EventType::Screenshot => screenshot += 1,
+            _ => {}
+        }
+    }
 
     let top_application = app_usage.first().map(|a| a.application.clone());
 
-    Ok(DailyStatistics {
+    DailyStatistics {
         active: active_minutes,
         idle: idle_minutes,
         copy,
         paste,
         screenshot,
         top_application,
-    })
+    }
 }
 
 pub fn build_idle_analysis(repo: &Repository, date: NaiveDate) -> Result<IdleAnalysis> {
     let events = repo.get_events_for_date(date)?;
-    let sessions = extract_idle_sessions(&events);
+    Ok(build_idle_analysis_from(&events))
+}
+
+pub fn build_idle_analysis_from(events: &[crate::events::ActivityEvent]) -> IdleAnalysis {
+    let sessions = extract_idle_sessions(events);
 
     let total_idle_seconds: i64 = sessions.iter().map(|s| s.duration_seconds).sum();
     let total_idle_minutes = total_idle_seconds / 60;
@@ -111,13 +131,13 @@ pub fn build_idle_analysis(repo: &Repository, date: NaiveDate) -> Result<IdleAna
         0
     };
 
-    Ok(IdleAnalysis {
+    IdleAnalysis {
         total_idle_minutes,
         session_count,
         longest_session_minutes,
         average_session_minutes,
         sessions,
-    })
+    }
 }
 
 fn extract_idle_sessions(events: &[crate::events::ActivityEvent]) -> Vec<IdleSession> {
@@ -157,6 +177,10 @@ fn extract_idle_sessions(events: &[crate::events::ActivityEvent]) -> Vec<IdleSes
 
 pub fn build_timeline(repo: &Repository, date: NaiveDate) -> Result<Vec<TimelineSegment>> {
     let events = repo.get_events_for_date(date)?;
+    Ok(build_timeline_from(&events))
+}
+
+pub fn build_timeline_from(events: &[crate::events::ActivityEvent]) -> Vec<TimelineSegment> {
     let mut segments = Vec::new();
 
     for event in events {
@@ -166,7 +190,7 @@ pub fn build_timeline(repo: &Repository, date: NaiveDate) -> Result<Vec<Timeline
         let Some(duration) = event.duration.filter(|d| *d > 0) else {
             continue;
         };
-        let Some(app) = event.application else {
+        let Some(ref app) = event.application else {
             continue;
         };
 
@@ -174,21 +198,25 @@ pub fn build_timeline(repo: &Repository, date: NaiveDate) -> Result<Vec<Timeline
         let start = end - chrono::Duration::seconds(duration);
 
         segments.push(TimelineSegment {
-            application: app,
+            application: app.clone(),
             start: start.format("%H:%M:%S").to_string(),
             end: end.format("%H:%M:%S").to_string(),
             duration,
         });
     }
 
-    Ok(segments)
+    segments
 }
 
 pub fn build_full_timeline(repo: &Repository, date: NaiveDate) -> Result<Vec<FullTimelineItem>> {
     let events = repo.get_events_for_date(date)?;
+    Ok(build_full_timeline_from(&events))
+}
+
+pub fn build_full_timeline_from(events: &[crate::events::ActivityEvent]) -> Vec<FullTimelineItem> {
     let mut items = Vec::new();
 
-    for event in &events {
+    for event in events {
         match event.event_type {
             EventType::WindowFocus if event.duration.filter(|d| *d > 0).is_some() => {
                 let duration = event.duration.unwrap();
@@ -196,7 +224,10 @@ pub fn build_full_timeline(repo: &Repository, date: NaiveDate) -> Result<Vec<Ful
                 let start = end - chrono::Duration::seconds(duration);
                 items.push(FullTimelineItem {
                     kind: "app".into(),
-                    label: event.application.clone().unwrap_or_else(|| "Unknown".into()),
+                    label: event
+                        .application
+                        .clone()
+                        .unwrap_or_else(|| "Unknown".into()),
                     start: start.format("%H:%M:%S").to_string(),
                     end: Some(end.format("%H:%M:%S").to_string()),
                     duration: Some(duration),
@@ -214,7 +245,11 @@ pub fn build_full_timeline(repo: &Repository, date: NaiveDate) -> Result<Vec<Ful
                 });
             }
             EventType::IdleEnd => {
-                if let Some(last) = items.iter_mut().rev().find(|i| i.kind == "idle" && i.end.is_none()) {
+                if let Some(last) = items
+                    .iter_mut()
+                    .rev()
+                    .find(|i| i.kind == "idle" && i.end.is_none())
+                {
                     last.end = Some(event.created_at.format("%H:%M:%S").to_string());
                     if let (Ok(start), Ok(end)) = (
                         chrono::NaiveTime::parse_from_str(&last.start, "%H:%M:%S"),
@@ -247,11 +282,15 @@ pub fn build_full_timeline(repo: &Repository, date: NaiveDate) -> Result<Vec<Ful
     }
 
     items.sort_by(|a, b| a.start.cmp(&b.start));
-    Ok(items)
+    items
 }
 
 pub fn build_hourly_activity(repo: &Repository, date: NaiveDate) -> Result<Vec<(u32, f64)>> {
     let events = repo.get_events_for_date(date)?;
+    Ok(build_hourly_activity_from(&events))
+}
+
+pub fn build_hourly_activity_from(events: &[crate::events::ActivityEvent]) -> Vec<(u32, f64)> {
     let mut hourly: [i64; 24] = [0; 24];
 
     for event in events {
@@ -267,11 +306,11 @@ pub fn build_hourly_activity(repo: &Repository, date: NaiveDate) -> Result<Vec<(
     }
 
     let max = hourly.iter().copied().max().unwrap_or(1).max(1) as f64;
-    Ok(hourly
+    hourly
         .iter()
         .enumerate()
         .map(|(h, &secs)| (h as u32, (secs as f64 / max) * 100.0))
-        .collect())
+        .collect()
 }
 
 #[derive(Debug, Serialize)]
@@ -284,6 +323,10 @@ pub struct ActionHourlyPoint {
 
 pub fn build_action_hourly(repo: &Repository, date: NaiveDate) -> Result<Vec<ActionHourlyPoint>> {
     let events = repo.get_events_for_date(date)?;
+    Ok(build_action_hourly_from(&events))
+}
+
+pub fn build_action_hourly_from(events: &[crate::events::ActivityEvent]) -> Vec<ActionHourlyPoint> {
     let mut hourly_copy = [0u32; 24];
     let mut hourly_paste = [0u32; 24];
     let mut hourly_screenshot = [0u32; 24];
@@ -301,12 +344,12 @@ pub fn build_action_hourly(repo: &Repository, date: NaiveDate) -> Result<Vec<Act
         }
     }
 
-    Ok((0..24)
+    (0..24)
         .map(|h| ActionHourlyPoint {
             hour: h,
             copy: hourly_copy[h as usize],
             paste: hourly_paste[h as usize],
             screenshot: hourly_screenshot[h as usize],
         })
-        .collect())
+        .collect()
 }

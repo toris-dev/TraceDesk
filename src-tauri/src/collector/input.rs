@@ -10,24 +10,111 @@ use std::path::Path;
 use std::time::{Duration, Instant};
 
 #[cfg(not(target_os = "macos"))]
+use std::sync::atomic::{AtomicBool, Ordering};
+
+#[cfg(not(target_os = "macos"))]
+static LISTENER_STARTED: AtomicBool = AtomicBool::new(false);
+
+#[cfg(not(target_os = "macos"))]
+static LISTENER_ENABLED: AtomicBool = AtomicBool::new(false);
+
+#[cfg(not(target_os = "macos"))]
 const DEBOUNCE: Duration = Duration::from_millis(400);
 
 #[derive(Debug, Clone)]
 pub enum InputEvent {
-    Copy,
-    Paste,
-    Screenshot { shortcut: String },
+    Copy {
+        app: Option<String>,
+        window_title: Option<String>,
+    },
+    Paste {
+        app: Option<String>,
+        window_title: Option<String>,
+    },
+    Screenshot {
+        shortcut: String,
+        app: Option<String>,
+        window_title: Option<String>,
+    },
+}
+
+#[derive(Debug, Clone, Default)]
+pub struct SourceContext {
+    pub app: Option<String>,
+    pub window_title: Option<String>,
+}
+
+impl InputEvent {
+    pub fn source_context(&self) -> SourceContext {
+        match self {
+            Self::Copy { app, window_title }
+            | Self::Paste { app, window_title }
+            | Self::Screenshot {
+                app, window_title, ..
+            } => SourceContext {
+                app: app.clone(),
+                window_title: window_title.clone(),
+            },
+        }
+    }
+
+    pub fn with_source_context(self, ctx: SourceContext) -> Self {
+        match self {
+            Self::Copy { .. } => Self::Copy {
+                app: ctx.app,
+                window_title: ctx.window_title,
+            },
+            Self::Paste { .. } => Self::Paste {
+                app: ctx.app,
+                window_title: ctx.window_title,
+            },
+            Self::Screenshot { shortcut, .. } => Self::Screenshot {
+                shortcut,
+                app: ctx.app,
+                window_title: ctx.window_title,
+            },
+        }
+    }
+}
+
+#[cfg(not(target_os = "macos"))]
+fn copy_event() -> InputEvent {
+    let ctx = current_source_context();
+    InputEvent::Copy {
+        app: ctx.app,
+        window_title: ctx.window_title,
+    }
+}
+
+#[cfg(not(target_os = "macos"))]
+fn paste_event() -> InputEvent {
+    let ctx = current_source_context();
+    InputEvent::Paste {
+        app: ctx.app,
+        window_title: ctx.window_title,
+    }
+}
+
+#[cfg(not(target_os = "macos"))]
+fn screenshot_event(shortcut: impl Into<String>) -> InputEvent {
+    let ctx = current_source_context();
+    InputEvent::Screenshot {
+        shortcut: shortcut.into(),
+        app: ctx.app,
+        window_title: ctx.window_title,
+    }
 }
 
 pub fn record_copy(
     repo: &crate::database::Repository,
     app: Option<&str>,
+    window_title: Option<&str>,
     store_preview: bool,
 ) -> Result<ActivityEvent> {
     let metadata = clipboard::build_clipboard_metadata(store_preview);
     let mut event = ActivityEvent::new(EventType::Copy).with_metadata(metadata);
-    if let Some(app) = app {
-        event = event.with_app(app.to_string(), None);
+    if let Some(app) = app.filter(|a| !a.is_empty()) {
+        event = event.with_app(app.to_string(), window_title.map(String::from));
     }
     let id = repo.insert_event(&event)?;
     event.id = Some(id);
@@ -38,12 +125,13 @@ pub fn record_copy(
 pub fn record_paste(
     repo: &crate::database::Repository,
     app: Option<&str>,
+    window_title: Option<&str>,
     store_preview: bool,
 ) -> Result<ActivityEvent> {
     let metadata = clipboard::build_clipboard_metadata(store_preview);
     let mut event = ActivityEvent::new(EventType::Paste).with_metadata(metadata);
-    if let Some(app) = app {
-        event = event.with_app(app.to_string(), None);
+    if let Some(app) = app.filter(|a| !a.is_empty()) {
+        event = event.with_app(app.to_string(), window_title.map(String::from));
     }
     let id = repo.insert_event(&event)?;
     event.id = Some(id);
@@ -55,13 +143,14 @@ pub fn record_screenshot(
     repo: &crate::database::Repository,
     shortcut: &str,
     app: Option<&str>,
+    window_title: Option<&str>,
 ) -> Result<ActivityEvent> {
     let mut event = ActivityEvent::new(EventType::Screenshot).with_metadata(json!({
         "source": "keyboard",
         "shortcut": shortcut,
     }));
-    if let Some(app) = app {
-        event = event.with_app(app.to_string(), None);
+    if let Some(app) = app.filter(|a| !a.is_empty()) {
+        event = event.with_app(app.to_string(), window_title.map(String::from));
     }
     let id = repo.insert_event(&event)?;
     event.id = Some(id);
@@ -144,21 +233,31 @@ fn enrich_screenshot_metadata(
     if store_preview {
         if let Some(event_id) = event_id {
             if let Ok(thumb) = thumbnail::create_screenshot_thumbnail(path, event_id) {
-                obj.insert(
-                    "thumbnail_path".into(),
-                    json!(thumb.display().to_string()),
-                );
+                obj.insert("thumbnail_path".into(), json!(thumb.display().to_string()));
             }
         }
     }
 }
 
+pub fn current_source_context() -> SourceContext {
+    match create_monitor().get_active_window() {
+        Ok(Some(w)) => SourceContext {
+            app: Some(w.application),
+            window_title: if w.title.is_empty() {
+                None
+            } else {
+                Some(w.title)
+            },
+        },
+        _ => SourceContext {
+            app: current_app_name(),
+            window_title: None,
+        },
+    }
+}
+
 pub fn current_app_name() -> Option<String> {
-    create_monitor()
-        .get_active_window()
-        .ok()
-        .flatten()
-        .map(|w| w.application)
+    current_source_context().app
 }
 
 #[cfg(not(target_os = "macos"))]
@@ -266,8 +365,8 @@ fn detect_action(modifiers: &ModifierState, key: rdev::Key) -> Option<InputEvent
 
     if primary && !modifiers.shift {
         match key {
-            rdev::Key::KeyC => return Some(InputEvent::Copy),
-            rdev::Key::KeyV => return Some(InputEvent::Paste),
+            rdev::Key::KeyC => return Some(copy_event()),
+            rdev::Key::KeyV => return Some(paste_event()),
             _ => {}
         }
     }
@@ -275,21 +374,9 @@ fn detect_action(modifiers: &ModifierState, key: rdev::Key) -> Option<InputEvent
     #[cfg(target_os = "macos")]
     if modifiers.meta && modifiers.shift {
         match key {
-            rdev::Key::Num3 => {
-                return Some(InputEvent::Screenshot {
-                    shortcut: "cmd+shift+3".into(),
-                });
-            }
-            rdev::Key::Num4 => {
-                return Some(InputEvent::Screenshot {
-                    shortcut: "cmd+shift+4".into(),
-                });
-            }
-            rdev::Key::Num5 => {
-                return Some(InputEvent::Screenshot {
-                    shortcut: "cmd+shift+5".into(),
-                });
-            }
+            rdev::Key::Num3 => return Some(screenshot_event("cmd+shift+3")),
+            rdev::Key::Num4 => return Some(screenshot_event("cmd+shift+4")),
+            rdev::Key::Num5 => return Some(screenshot_event("cmd+shift+5")),
             _ => {}
         }
     }
@@ -297,34 +384,38 @@ fn detect_action(modifiers: &ModifierState, key: rdev::Key) -> Option<InputEvent
     #[cfg(target_os = "windows")]
     {
         if key == rdev::Key::PrintScreen {
-            return Some(InputEvent::Screenshot {
-                shortcut: "printscreen".into(),
-            });
+            return Some(screenshot_event("printscreen"));
         }
         if modifiers.meta && modifiers.shift && key == rdev::Key::KeyS {
-            return Some(InputEvent::Screenshot {
-                shortcut: "win+shift+s".into(),
-            });
+            return Some(screenshot_event("win+shift+s"));
         }
     }
 
     #[cfg(target_os = "linux")]
     {
         if key == rdev::Key::PrintScreen {
-            return Some(InputEvent::Screenshot {
-                shortcut: "printscreen".into(),
-            });
+            return Some(screenshot_event("printscreen"));
         }
         if primary && modifiers.shift && key == rdev::Key::KeyS {
-            return Some(InputEvent::Screenshot {
-                shortcut: "ctrl+shift+s".into(),
-            });
+            return Some(screenshot_event("ctrl+shift+s"));
         }
     }
 
     let _ = key_label(key);
     let _ = primary;
     None
+}
+
+#[cfg(not(target_os = "macos"))]
+pub fn sync_input_listener(enabled: bool, tx: crossbeam_channel::Sender<InputEvent>) {
+    LISTENER_ENABLED.store(enabled, Ordering::SeqCst);
+    if !enabled {
+        return;
+    }
+    if LISTENER_STARTED.swap(true, Ordering::SeqCst) {
+        return;
+    }
+    let _ = spawn_input_listener(tx);
 }
 
 #[cfg(not(target_os = "macos"))]
@@ -345,12 +436,15 @@ fn spawn_rdev_input_listener(
             let mut debouncer = Debouncer::new();
 
             let callback = move |event: rdev::Event| {
+                if !LISTENER_ENABLED.load(Ordering::SeqCst) {
+                    return;
+                }
                 match event.event_type {
                     rdev::EventType::KeyPress(key) => {
                         if let Some(action) = detect_action(&modifiers, key) {
                             let allowed = match &action {
-                                InputEvent::Copy => debouncer.allow_copy(),
-                                InputEvent::Paste => debouncer.allow_paste(),
+                                InputEvent::Copy { .. } => debouncer.allow_copy(),
+                                InputEvent::Paste { .. } => debouncer.allow_paste(),
                                 InputEvent::Screenshot { .. } => debouncer.allow_screenshot(),
                             };
                             if allowed {

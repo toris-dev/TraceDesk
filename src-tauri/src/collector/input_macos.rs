@@ -5,24 +5,34 @@
 //!
 //! CGEventTap/rdev는 macOS 15+에서 TSM API 크래시 유발 → NSEvent 사용.
 
-use crate::collector::input::InputEvent;
+use crate::collector::input::{self, InputEvent};
 use block::ConcreteBlock;
 use cocoa::base::{id, nil};
 use cocoa::foundation::NSAutoreleasePool;
 use crossbeam_channel::Sender;
 use objc::{class, msg_send, sel, sel_impl};
+use parking_lot::Mutex;
 use std::ffi::CStr;
-use std::sync::{Arc, Mutex, OnceLock};
+use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::Arc;
 use std::time::{Duration, Instant};
+use tauri::AppHandle;
 
 const NSEVENT_KEY_DOWN: u64 = 1 << 10;
 const NS_COMMAND: u64 = 1 << 20;
 const NS_SHIFT: u64 = 1 << 17;
 
+// Physical key codes (layout-independent)
+const VK_ANSI_C: u16 = 8;
+const VK_ANSI_V: u16 = 9;
+const VK_ANSI_3: u16 = 20;
+const VK_ANSI_4: u16 = 21;
+const VK_ANSI_5: u16 = 23;
+
 const DEBOUNCE: Duration = Duration::from_millis(400);
 
-static GLOBAL_MONITOR: OnceLock<usize> = OnceLock::new();
-static LOCAL_MONITOR: OnceLock<usize> = OnceLock::new();
+static MONITORS: Mutex<(Option<usize>, Option<usize>)> = Mutex::new((None, None));
+static INSTALLED: AtomicBool = AtomicBool::new(false);
 
 struct Debouncer {
     last_copy: Option<Instant>,
@@ -41,8 +51,8 @@ impl Debouncer {
 
     fn allow(&mut self, action: &InputEvent) -> bool {
         let slot = match action {
-            InputEvent::Copy => &mut self.last_copy,
-            InputEvent::Paste => &mut self.last_paste,
+            InputEvent::Copy { .. } => &mut self.last_copy,
+            InputEvent::Paste { .. } => &mut self.last_paste,
             InputEvent::Screenshot { .. } => &mut self.last_screenshot,
         };
         let now = Instant::now();
@@ -70,12 +80,7 @@ fn event_char(event: id) -> Option<String> {
         if cstr.is_null() {
             return None;
         }
-        Some(
-            CStr::from_ptr(cstr)
-                .to_string_lossy()
-                .trim()
-                .to_lowercase(),
-        )
+        Some(CStr::from_ptr(cstr).to_string_lossy().trim().to_lowercase())
     }
 }
 
@@ -84,28 +89,75 @@ fn detect_action(flags: u64, event: id) -> Option<InputEvent> {
         return None;
     }
 
-    let ch = event_char(event)?;
-    let shift = flags & NS_SHIFT != 0;
+    unsafe {
+        let key_code: u16 = msg_send![event, keyCode];
+        let shift = flags & NS_SHIFT != 0;
 
-    if !shift {
-        return match ch.as_str() {
-            "c" => Some(InputEvent::Copy),
-            "v" => Some(InputEvent::Paste),
-            _ => None,
-        };
-    }
+        if !shift {
+            return match key_code {
+                VK_ANSI_C => Some(InputEvent::Copy {
+                    app: None,
+                    window_title: None,
+                }),
+                VK_ANSI_V => Some(InputEvent::Paste {
+                    app: None,
+                    window_title: None,
+                }),
+                _ => {
+                    let ch = event_char(event)?;
+                    match ch.as_str() {
+                        "c" => Some(InputEvent::Copy {
+                            app: None,
+                            window_title: None,
+                        }),
+                        "v" => Some(InputEvent::Paste {
+                            app: None,
+                            window_title: None,
+                        }),
+                        _ => None,
+                    }
+                }
+            };
+        }
 
-    match ch.as_str() {
-        "3" => Some(InputEvent::Screenshot {
-            shortcut: "cmd+shift+3".into(),
-        }),
-        "4" => Some(InputEvent::Screenshot {
-            shortcut: "cmd+shift+4".into(),
-        }),
-        "5" => Some(InputEvent::Screenshot {
-            shortcut: "cmd+shift+5".into(),
-        }),
-        _ => None,
+        match key_code {
+            VK_ANSI_3 => Some(InputEvent::Screenshot {
+                shortcut: "cmd+shift+3".into(),
+                app: None,
+                window_title: None,
+            }),
+            VK_ANSI_4 => Some(InputEvent::Screenshot {
+                shortcut: "cmd+shift+4".into(),
+                app: None,
+                window_title: None,
+            }),
+            VK_ANSI_5 => Some(InputEvent::Screenshot {
+                shortcut: "cmd+shift+5".into(),
+                app: None,
+                window_title: None,
+            }),
+            _ => {
+                let ch = event_char(event)?;
+                match ch.as_str() {
+                    "3" => Some(InputEvent::Screenshot {
+                        shortcut: "cmd+shift+3".into(),
+                        app: None,
+                        window_title: None,
+                    }),
+                    "4" => Some(InputEvent::Screenshot {
+                        shortcut: "cmd+shift+4".into(),
+                        app: None,
+                        window_title: None,
+                    }),
+                    "5" => Some(InputEvent::Screenshot {
+                        shortcut: "cmd+shift+5".into(),
+                        app: None,
+                        window_title: None,
+                    }),
+                    _ => None,
+                }
+            }
+        }
     }
 }
 
@@ -116,18 +168,45 @@ fn dispatch_key_event(event: id, tx: &Sender<InputEvent>, debouncer: &Mutex<Debo
     unsafe {
         let flags: u64 = msg_send![event, modifierFlags];
         if let Some(action) = detect_action(flags, event) {
-            if let Ok(mut d) = debouncer.lock() {
-                if d.allow(&action) {
-                    tracing::debug!(?action, "macOS key action detected");
-                    let _ = tx.send(action);
-                }
+            let ctx = input::current_source_context();
+            let action = action.with_source_context(ctx);
+            let mut d = debouncer.lock();
+            if d.allow(&action) {
+                tracing::debug!(?action, "macOS key action detected");
+                let _ = tx.send(action);
             }
         }
     }
 }
 
+pub fn uninstall_key_monitors() {
+    if !INSTALLED.load(Ordering::SeqCst) {
+        return;
+    }
+
+    unsafe {
+        let _pool = NSAutoreleasePool::new(nil);
+        let mut guards = MONITORS.lock();
+        if let Some(global) = guards.0.take() {
+            let obj: id = global as id;
+            let _: () = msg_send![class!(NSEvent), removeMonitor: obj];
+        }
+        if let Some(local) = guards.1.take() {
+            let obj: id = local as id;
+            let _: () = msg_send![class!(NSEvent), removeMonitor: obj];
+        }
+    }
+
+    INSTALLED.store(false, Ordering::SeqCst);
+    tracing::info!("macOS key monitors removed");
+}
+
 /// 메인 스레드에서 호출해야 함 (Tauri setup → run_on_main_thread)
 pub fn install_global_key_monitor(tx: Sender<InputEvent>) -> Result<(), String> {
+    if INSTALLED.load(Ordering::SeqCst) {
+        return Ok(());
+    }
+
     let tx = Arc::new(tx);
     let debouncer = Arc::new(Mutex::new(Debouncer::new()));
 
@@ -167,23 +246,76 @@ pub fn install_global_key_monitor(tx: Sender<InputEvent>) -> Result<(), String> 
             );
         }
 
+        let mut guards = MONITORS.lock();
         if global == nil {
             tracing::warn!(
                 "global key monitor unavailable — copy/paste in other apps needs Input Monitoring permission"
             );
         } else {
             std::mem::forget(global_handler);
-            let _ = GLOBAL_MONITOR.set(global as usize);
+            guards.0 = Some(global as usize);
         }
 
         if local == nil {
             tracing::warn!("local key monitor unavailable");
         } else {
             std::mem::forget(local_handler);
-            let _ = LOCAL_MONITOR.set(local as usize);
+            guards.1 = Some(local as usize);
         }
     }
 
+    INSTALLED.store(true, Ordering::SeqCst);
     tracing::info!("macOS key monitors installed (global + local NSEvent)");
+    Ok(())
+}
+
+pub fn has_global_monitor() -> bool {
+    MONITORS.lock().0.is_some()
+}
+
+fn input_monitoring_granted() -> bool {
+    #[link(name = "CoreGraphics", kind = "framework")]
+    extern "C" {
+        fn CGPreflightListenEventAccess() -> bool;
+    }
+    unsafe { CGPreflightListenEventAccess() }
+}
+
+pub fn reinstall_key_monitors_if_needed(app: &AppHandle, tx: Sender<InputEvent>) {
+    if !INSTALLED.load(Ordering::SeqCst) {
+        return;
+    }
+    if has_global_monitor() || !input_monitoring_granted() {
+        return;
+    }
+    tracing::info!("input monitoring permission granted — reinstalling global key monitor");
+    let _ = app.run_on_main_thread(move || {
+        uninstall_key_monitors();
+        if let Err(e) = install_global_key_monitor(tx) {
+            tracing::error!(error = %e, "failed to reinstall global key monitor");
+        }
+    });
+}
+
+pub fn sync_key_monitor(
+    app: &AppHandle,
+    enabled: bool,
+    tx: Sender<InputEvent>,
+) -> Result<(), String> {
+    if enabled {
+        if INSTALLED.load(Ordering::SeqCst) {
+            reinstall_key_monitors_if_needed(app, tx);
+            return Ok(());
+        }
+        app.run_on_main_thread(move || {
+            if let Err(e) = install_global_key_monitor(tx) {
+                tracing::error!(error = %e, "failed to install macOS key monitor");
+            }
+        })
+        .map_err(|e| e.to_string())?;
+    } else {
+        app.run_on_main_thread(uninstall_key_monitors)
+            .map_err(|e| e.to_string())?;
+    }
     Ok(())
 }

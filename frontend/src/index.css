@@ -1,27 +1,86 @@
 @import "tailwindcss";
 
-@theme {
-  --color-surface: #0f1117;
-  --color-surface-elevated: #1a1d27;
-  --color-border: #2a2f3d;
-  --color-accent: #6366f1;
-  --color-accent-muted: #818cf8;
-  --color-text: #e2e8f0;
-  --color-text-muted: #94a3b8;
-  --color-success: #22c55e;
-  --color-warning: #f59e0b;
+@theme inline {
+  --color-surface: var(--td-surface);
+  --color-surface-elevated: var(--td-surface-elevated);
+  --color-border: var(--td-border);
+  --color-accent: var(--td-accent);
+  --color-accent-muted: var(--td-accent-muted);
+  --color-accent-foreground: var(--td-accent-foreground);
+  --color-text: var(--td-text);
+  --color-text-muted: var(--td-text-muted);
+  --color-success: var(--td-success);
+  --color-success-text: var(--td-success-text);
+  --color-danger: var(--td-danger);
+  --color-danger-text: var(--td-danger-text);
+  --color-warning: var(--td-warning);
+  --color-warning-text: var(--td-warning-text);
+  --color-overlay: var(--td-overlay);
+  --color-chart-grid: var(--td-chart-grid);
+  --color-image-bg: var(--td-image-bg);
+  --color-header-backdrop: var(--td-header-backdrop);
+}
+
+:root,
+[data-theme="dark"] {
+  color-scheme: dark;
+  --td-surface: #0f1117;
+  --td-surface-elevated: #1a1d27;
+  --td-border: #2a2f3d;
+  --td-accent: #6366f1;
+  --td-accent-muted: #818cf8;
+  --td-accent-foreground: #ffffff;
+  --td-text: #e2e8f0;
+  --td-text-muted: #94a3b8;
+  --td-success: #22c55e;
+  --td-success-text: #4ade80;
+  --td-danger: #ef4444;
+  --td-danger-text: #f87171;
+  --td-warning: #f59e0b;
+  --td-warning-text: #fbbf24;
+  --td-overlay: rgb(0 0 0 / 0.65);
+  --td-chart-grid: #2a2f3d;
+  --td-image-bg: rgb(0 0 0 / 0.25);
+  --td-header-backdrop: rgb(15 17 23 / 0.9);
+}
+
+[data-theme="light"] {
+  color-scheme: light;
+  --td-surface: #eef2f7;
+  --td-surface-elevated: #ffffff;
+  --td-border: #cbd5e1;
+  --td-accent: #4f46e5;
+  --td-accent-muted: #6366f1;
+  --td-accent-foreground: #ffffff;
+  --td-text: #0f172a;
+  --td-text-muted: #64748b;
+  --td-success: #16a34a;
+  --td-success-text: #15803d;
+  --td-danger: #dc2626;
+  --td-danger-text: #b91c1c;
+  --td-warning: #d97706;
+  --td-warning-text: #92400e;
+  --td-overlay: rgb(15 23 42 / 0.45);
+  --td-chart-grid: #e2e8f0;
+  --td-image-bg: rgb(15 23 42 / 0.06);
+  --td-header-backdrop: rgb(255 255 255 / 0.88);
 }
 
 body {
   margin: 0;
   min-height: 100vh;
-  background: var(--color-surface);
-  color: var(--color-text);
+  background: var(--td-surface);
+  color: var(--td-text);
   font-family: "Inter", system-ui, -apple-system, sans-serif;
+  transition:
+    background-color 0.2s ease,
+    color 0.2s ease;
 }
 
 #root {
   min-height: 100vh;
+  height: 100vh;
+  overflow: hidden;
 }
 
 /* ── 거북이 마스코트 애니메이션 ── */

@@ -14,7 +14,7 @@ use std::time::Duration;
 use tauri::AppHandle;
 use tokio::sync::watch;
 
-const POLL_INTERVAL: Duration = Duration::from_secs(2);
+const POLL_INTERVAL: Duration = Duration::from_secs(1);
 const IDLE_THRESHOLD_SECS: u64 = 300;
 const SUMMARY_INTERVAL: Duration = Duration::from_secs(60);
 
@@ -85,7 +85,17 @@ impl CollectorAgent {
                 break;
             }
 
-            self.process_input_events(&input_rx)?;
+            match input_rx.recv_timeout(Duration::from_millis(250)) {
+                Ok(event) => {
+                    self.process_input_event(event)?;
+                    while let Ok(event) = input_rx.try_recv() {
+                        self.process_input_event(event)?;
+                    }
+                }
+                Err(crossbeam_channel::RecvTimeoutError::Timeout) => {}
+                Err(crossbeam_channel::RecvTimeoutError::Disconnected) => break,
+            }
+
             self.process_screenshot_events(&screenshot_rx)?;
 
             let idle_secs = self.monitor.get_idle_seconds().unwrap_or(0);
@@ -165,42 +175,27 @@ impl CollectorAgent {
         Ok(())
     }
 
-    fn process_input_events(
-        &self,
-        rx: &crossbeam_channel::Receiver<InputEvent>,
-    ) -> Result<()> {
-        while let Ok(event) = rx.try_recv() {
-            let app = input::current_app_name();
-            let store_preview = self.store_clipboard_preview();
-            match event {
-                InputEvent::Copy => {
-                    let recorded =
-                        input::record_copy(&self.repository, app.as_deref(), store_preview)?;
-                    activity_emit::emit_action_event(&self.app_handle, &recorded);
-                }
-                InputEvent::Paste => {
-                    let recorded =
-                        input::record_paste(&self.repository, app.as_deref(), store_preview)?;
-                    activity_emit::emit_action_event(&self.app_handle, &recorded);
-                }
-                InputEvent::Screenshot { shortcut } => {
-                    screenshot::mark_keyboard_screenshot();
-                    let recorded = input::record_screenshot(
-                        &self.repository,
-                        &shortcut,
-                        app.as_deref(),
-                    )?;
-                    activity_emit::emit_action_event(&self.app_handle, &recorded);
-                }
+    fn process_input_event(&self, event: InputEvent) -> Result<()> {
+        let repo = Arc::clone(&self.repository);
+        let app_handle = self.app_handle.clone();
+        let store_preview = self.store_clipboard_preview();
+        tokio::task::spawn_blocking(move || {
+            if let Err(e) = handle_input_event(&repo, &app_handle, event, store_preview) {
+                tracing::warn!(error = %e, "input event handling failed");
             }
+        });
+        Ok(())
+    }
+
+    #[allow(dead_code)]
+    fn process_input_events(&self, rx: &crossbeam_channel::Receiver<InputEvent>) -> Result<()> {
+        while let Ok(event) = rx.try_recv() {
+            self.process_input_event(event)?;
         }
         Ok(())
     }
 
-    fn process_screenshot_events(
-        &self,
-        rx: &crossbeam_channel::Receiver<PathBuf>,
-    ) -> Result<()> {
+    fn process_screenshot_events(&self, rx: &crossbeam_channel::Receiver<PathBuf>) -> Result<()> {
         while let Ok(path) = rx.try_recv() {
             let store_preview = self.store_screenshot_preview();
             if let Some(event_id) = screenshot::take_pending_keyboard_event() {
@@ -224,8 +219,7 @@ impl CollectorAgent {
                 continue;
             }
 
-            let recorded =
-                input::record_screenshot_path(&self.repository, &path, store_preview)?;
+            let recorded = input::record_screenshot_path(&self.repository, &path, store_preview)?;
             activity_emit::emit_action_event(&self.app_handle, &recorded);
         }
         Ok(())
@@ -252,4 +246,36 @@ impl CollectorAgent {
 
         Ok(())
     }
+}
+
+fn handle_input_event(
+    repo: &Repository,
+    app_handle: &AppHandle,
+    event: InputEvent,
+    store_preview: bool,
+) -> Result<()> {
+    let ctx = event.source_context();
+    let fallback = input::current_source_context();
+    let app = ctx.app.or(fallback.app);
+    let window_title = ctx.window_title.or(fallback.window_title);
+
+    match event {
+        InputEvent::Copy { .. } => {
+            let recorded =
+                input::record_copy(repo, app.as_deref(), window_title.as_deref(), store_preview)?;
+            activity_emit::emit_action_event(app_handle, &recorded);
+        }
+        InputEvent::Paste { .. } => {
+            let recorded =
+                input::record_paste(repo, app.as_deref(), window_title.as_deref(), store_preview)?;
+            activity_emit::emit_action_event(app_handle, &recorded);
+        }
+        InputEvent::Screenshot { shortcut, .. } => {
+            screenshot::mark_keyboard_screenshot();
+            let recorded =
+                input::record_screenshot(repo, &shortcut, app.as_deref(), window_title.as_deref())?;
+            activity_emit::emit_action_event(app_handle, &recorded);
+        }
+    }
+    Ok(())
 }

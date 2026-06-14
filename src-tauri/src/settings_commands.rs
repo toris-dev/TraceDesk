@@ -1,8 +1,11 @@
 use crate::archive::{collect_db_stats, run_archive, ArchiveResult, DbStats};
+use crate::collector::input_bridge::{sync_input_monitoring, InputChannel};
+use crate::menu;
 use crate::os::{request_selected_permissions, PermissionStatus};
-use crate::settings::{save_settings, AppSettings};
+use crate::settings::{normalize_locale, normalize_theme, save_settings, AppSettings};
+use crate::tray;
 use std::sync::{Arc, RwLock};
-use tauri::State;
+use tauri::{Manager, State};
 use tauri_plugin_autostart::ManagerExt;
 
 #[derive(Clone)]
@@ -23,6 +26,8 @@ pub fn update_settings(
     enable_input_monitoring: Option<bool>,
     store_clipboard_preview: Option<bool>,
     store_screenshot_preview: Option<bool>,
+    locale: Option<String>,
+    theme: Option<String>,
 ) -> Result<AppSettings, String> {
     let mut settings = state.0.write().map_err(|e| e.to_string())?;
 
@@ -38,12 +43,23 @@ pub fn update_settings(
     }
     if let Some(v) = enable_input_monitoring {
         settings.enable_input_monitoring = v;
+        if let Some(channel) = app.try_state::<InputChannel>() {
+            sync_input_monitoring(&app, v, &channel.0);
+        }
     }
     if let Some(v) = store_clipboard_preview {
         settings.store_clipboard_preview = v;
     }
     if let Some(v) = store_screenshot_preview {
         settings.store_screenshot_preview = v;
+    }
+    if let Some(v) = locale {
+        settings.locale = normalize_locale(&v);
+        menu::setup(&app, &settings.locale).map_err(|e| e.to_string())?;
+        tray::setup(&app, &settings.locale).map_err(|e| e.to_string())?;
+    }
+    if let Some(v) = theme {
+        settings.theme = normalize_theme(&v);
     }
 
     save_settings(&settings).map_err(|e| e.to_string())?;
@@ -63,19 +79,31 @@ pub fn complete_setup(
     autostart_enabled: bool,
     enable_accessibility: bool,
     enable_input_monitoring: bool,
+    locale: Option<String>,
 ) -> Result<SetupResult, String> {
     let mut settings = state.0.write().map_err(|e| e.to_string())?;
 
     settings.autostart_enabled = autostart_enabled;
     settings.enable_accessibility = enable_accessibility;
     settings.enable_input_monitoring = enable_input_monitoring;
+    if let Some(v) = locale {
+        settings.locale = normalize_locale(&v);
+    }
     settings.setup_completed = true;
     settings.first_run_completed = true;
 
     save_settings(&settings).map_err(|e| e.to_string())?;
     sync_autostart(&app, autostart_enabled)?;
+    menu::setup(&app, &settings.locale).map_err(|e| e.to_string())?;
+    tray::setup(&app, &settings.locale).map_err(|e| e.to_string())?;
 
     let permissions = request_selected_permissions(enable_accessibility, enable_input_monitoring);
+
+    if enable_input_monitoring {
+        if let Some(channel) = app.try_state::<InputChannel>() {
+            sync_input_monitoring(&app, true, &channel.0);
+        }
+    }
 
     Ok(SetupResult {
         settings: settings.clone(),
@@ -116,7 +144,10 @@ pub fn sync_autostart(app: &tauri::AppHandle, enabled: bool) -> Result<(), Strin
     Ok(())
 }
 
-pub fn apply_autostart_preference(app: &tauri::AppHandle, settings: &AppSettings) -> Result<(), String> {
+pub fn apply_autostart_preference(
+    app: &tauri::AppHandle,
+    settings: &AppSettings,
+) -> Result<(), String> {
     if settings.setup_completed {
         sync_autostart(app, settings.autostart_enabled)?;
     }

@@ -1,10 +1,13 @@
 mod activity_emit;
+mod activity_item;
 mod analytics;
 mod archive;
 mod collector;
 mod commands;
 mod database;
 mod events;
+mod export;
+mod menu;
 mod os;
 mod settings;
 mod settings_commands;
@@ -12,6 +15,7 @@ mod state;
 mod system;
 mod tray;
 
+use crate::collector::input_bridge::{sync_input_monitoring, InputChannel};
 use settings::load_settings;
 use settings_commands::{apply_autostart_preference, maybe_run_auto_archive, SettingsState};
 use state::AppState;
@@ -30,13 +34,16 @@ pub fn run() {
         .init();
 
     tauri::Builder::default()
+        .plugin(tauri_plugin_process::init())
+        .plugin(tauri_plugin_updater::Builder::new().build())
         .plugin(tauri_plugin_shell::init())
         .plugin(tauri_plugin_autostart::init(
             tauri_plugin_autostart::MacosLauncher::LaunchAgent,
             Some(vec![]),
         ))
+        .plugin(tauri_plugin_dialog::init())
         .on_menu_event(|app, event| {
-            tray::handle_menu_event(app, event.id.as_ref());
+            menu::handle_menu_event(app, event.id.as_ref());
         })
         .on_web_content_process_terminate(|webview| {
             tracing::error!("webview process terminated — reloading UI");
@@ -57,23 +64,11 @@ pub fn run() {
             app.manage(settings_state.clone());
 
             let (input_tx, input_rx) = crossbeam_channel::unbounded();
+            app.manage(InputChannel(input_tx.clone()));
 
             if settings.enable_input_monitoring {
-                #[cfg(target_os = "macos")]
-                {
-                    let tx = input_tx.clone();
-                    app.handle().run_on_main_thread(move || {
-                        if let Err(e) = collector::input_macos::install_global_key_monitor(tx) {
-                            tracing::error!(error = %e, "failed to install macOS key monitor");
-                        }
-                    })?;
-                }
-                #[cfg(not(target_os = "macos"))]
-                {
-                    let _ = collector::input::spawn_input_listener(input_tx);
-                }
+                sync_input_monitoring(app.handle(), true, &input_tx);
             }
-            drop(input_tx);
 
             let (app_state, shutdown_rx) = match AppState::new() {
                 Ok(v) => v,
@@ -93,7 +88,10 @@ pub fn run() {
                     app_handle,
                     settings_state_for_collector,
                 );
-                if let Err(e) = agent.run(shutdown_rx, settings_for_collector, input_rx).await {
+                if let Err(e) = agent
+                    .run(shutdown_rx, settings_for_collector, input_rx)
+                    .await
+                {
                     tracing::error!(error = %e, "activity collector failed");
                 }
             });
@@ -110,11 +108,16 @@ pub fn run() {
             let thumb_dir = collector::thumbnail::thumbnails_dir();
             if let Err(e) = std::fs::create_dir_all(&thumb_dir) {
                 tracing::warn!(error = %e, "failed to create thumbnails directory");
-            } else if let Err(e) = app.handle().asset_protocol_scope().allow_directory(&thumb_dir, true) {
+            } else if let Err(e) = app
+                .handle()
+                .asset_protocol_scope()
+                .allow_directory(&thumb_dir, true)
+            {
                 tracing::warn!(error = %e, "failed to allow thumbnails for asset protocol");
             }
 
-            tray::setup(app.handle())?;
+            menu::setup(app.handle(), &settings.locale)?;
+            tray::setup(app.handle(), &settings.locale)?;
 
             Ok(())
         })
@@ -144,27 +147,27 @@ pub fn run() {
             settings_commands::complete_setup,
             settings_commands::get_db_stats,
             settings_commands::run_archive_now,
+            export::export_activity,
+            commands::get_activity_bundle,
         ])
         .build(tauri::generate_context!())
         .expect("failed to build TraceDesk application")
-        .run(|app_handle, event| {
-            match event {
-                RunEvent::WindowEvent { label, event, .. } if label == "main" => {
-                    if let WindowEvent::CloseRequested { api, .. } = event {
-                        api.prevent_close();
-                        tray::hide_main_window(app_handle);
-                        tracing::info!("window hidden — collector keeps running in tray");
-                    }
+        .run(|app_handle, event| match event {
+            RunEvent::WindowEvent { label, event, .. } if label == "main" => {
+                if let WindowEvent::CloseRequested { api, .. } = event {
+                    api.prevent_close();
+                    tray::hide_main_window(app_handle);
+                    tracing::info!("window hidden — collector keeps running in tray");
                 }
-                RunEvent::Reopen { .. } => {
-                    tray::show_main_window(app_handle);
-                }
-                RunEvent::Exit => {
-                    if let Some(state) = app_handle.try_state::<AppState>() {
-                        let _ = state.shutdown_tx.send(true);
-                    }
-                }
-                _ => {}
             }
+            RunEvent::Reopen { .. } => {
+                menu::show_main_window(app_handle);
+            }
+            RunEvent::Exit => {
+                if let Some(state) = app_handle.try_state::<AppState>() {
+                    let _ = state.shutdown_tx.send(true);
+                }
+            }
+            _ => {}
         });
 }

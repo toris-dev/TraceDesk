@@ -16,7 +16,7 @@ struct ClipboardSnapshot {
 pub fn build_clipboard_metadata(store_preview: bool) -> Value {
     std::thread::sleep(READ_DELAY);
     let mut snap = read_snapshot(store_preview);
-    if store_preview && snap.content_type == "empty" {
+    if snap.content_type == "empty" {
         std::thread::sleep(RETRY_DELAY);
         snap = read_snapshot(store_preview);
     }

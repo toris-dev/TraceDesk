@@ -101,18 +101,18 @@ export function PermissionBanner() {
   };
 
   return (
-    <div className="rounded-xl border border-amber-500/40 bg-amber-500/10 p-5 space-y-4">
+    <div className="rounded-xl border border-warning/40 bg-warning/10 p-5 space-y-4">
       <div className="flex items-start gap-4">
         <TortoiseMascot mood="confused" size="md" />
         <div>
-          <h2 className="text-amber-300 font-semibold">
+          <h2 className="text-warning-text font-semibold">
             {isRestart ? "앱 재시작 필요" : isMac ? "권한 설정 필요" : "활동 수집 확인 필요"}
           </h2>
           <p className="text-sm text-text-muted mt-1">
             {isRestart ? (
               <>
                 권한은 허용됐지만 창 추적이 아직 동작하지 않습니다.{" "}
-                <strong className="text-amber-200/90">{status.app_label ?? "TraceDesk"}</strong>
+                <strong className="text-warning-text">{status.app_label ?? "TraceDesk"}</strong>
                 을(를) 완전히 종료한 뒤 다시 실행하세요.
               </>
             ) : isMac ? (
@@ -121,7 +121,7 @@ export function PermissionBanner() {
                 {status.app_label && (
                   <>
                     {" "}
-                    설정에서 <strong className="text-amber-200/90">{status.app_label}</strong>
+                    설정에서 <strong className="text-warning-text">{status.app_label}</strong>
                     을(를) 찾아 허용하세요.
                   </>
                 )}
@@ -141,10 +141,10 @@ export function PermissionBanner() {
               className="flex items-start justify-between gap-4 rounded-lg bg-surface/80 border border-border p-3"
             >
               <div>
-                <p className="font-medium text-sm">
+                <p className="font-medium text-sm text-text">
                   {perm.name}
                   {perm.granted && perm.functional === false && (
-                    <span className="ml-2 text-xs text-amber-400">동작 안 함</span>
+                    <span className="ml-2 text-xs text-warning">동작 안 함</span>
                   )}
                 </p>
                 <p className="text-xs text-text-muted mt-1">{perm.description}</p>
@@ -153,7 +153,7 @@ export function PermissionBanner() {
                 <button
                   type="button"
                   onClick={() => openPermissionSettings(perm.id)}
-                  className="shrink-0 text-xs px-3 py-1.5 rounded-md border border-border hover:bg-surface-elevated transition-colors"
+                  className="shrink-0 text-xs px-3 py-1.5 rounded-md border border-border text-text hover:bg-surface-elevated transition-colors"
                 >
                   설정 열기
                 </button>
@@ -162,7 +162,7 @@ export function PermissionBanner() {
                 <button
                   type="button"
                   onClick={() => openPermissionSettings(perm.id)}
-                  className="shrink-0 text-xs px-3 py-1.5 rounded-md border border-border hover:bg-surface-elevated transition-colors"
+                  className="shrink-0 text-xs px-3 py-1.5 rounded-md border border-border text-text hover:bg-surface-elevated transition-colors"
                 >
                   Windows 설정
                 </button>
@@ -178,7 +178,7 @@ export function PermissionBanner() {
             type="button"
             disabled={loading}
             onClick={handleRequest}
-            className="text-sm px-4 py-2 rounded-lg bg-accent text-white hover:bg-accent/90 disabled:opacity-50"
+            className="text-sm px-4 py-2 rounded-lg bg-accent text-accent-foreground hover:bg-accent/90 disabled:opacity-50"
           >
             권한 요청
           </button>
@@ -187,7 +187,7 @@ export function PermissionBanner() {
           type="button"
           disabled={loading}
           onClick={handleRefresh}
-          className="text-sm px-4 py-2 rounded-lg border border-border hover:bg-surface-elevated disabled:opacity-50"
+          className="text-sm px-4 py-2 rounded-lg border border-border text-text hover:bg-surface-elevated disabled:opacity-50"
         >
           상태 새로고침
         </button>

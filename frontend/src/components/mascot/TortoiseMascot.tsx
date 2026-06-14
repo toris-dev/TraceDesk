@@ -152,9 +152,9 @@ export function MascotScene({
     >
       <TortoiseMascot mood={mood} size={isError ? "xl" : size} showBubble={!isError} interactive />
       <div>
-        <p className={`font-semibold ${isError ? "text-red-400" : "text-text"}`}>{title}</p>
+        <p className={`font-semibold ${isError ? "text-danger-text" : "text-text"}`}>{title}</p>
         {description && (
-          <p className={`text-sm mt-1 max-w-sm ${isError ? "text-red-300/80" : "text-text-muted"}`}>
+          <p className={`text-sm mt-1 max-w-sm ${isError ? "text-danger-text/80" : "text-text-muted"}`}>
             {description}
           </p>
         )}

@@ -3,7 +3,7 @@ use parking_lot::Mutex;
 use std::path::PathBuf;
 use std::time::{Duration, Instant};
 
-const SCREENSHOT_DEBOUNCE: Duration = Duration::from_secs(3);
+const SCREENSHOT_DEBOUNCE: Duration = Duration::from_secs(10);
 
 static LAST_KEYBOARD_SCREENSHOT: Mutex<Option<Instant>> = Mutex::new(None);
 static PENDING_KEYBOARD_EVENT: Mutex<Option<i64>> = Mutex::new(None);
@@ -16,10 +16,26 @@ pub fn set_pending_keyboard_event(event_id: i64) {
     *PENDING_KEYBOARD_EVENT.lock() = Some(event_id);
 }
 
+#[cfg(test)]
+static TEST_LOCK: parking_lot::Mutex<()> = parking_lot::Mutex::new(());
+
+#[cfg(test)]
+pub fn pending_test_guard() -> parking_lot::MutexGuard<'static, ()> {
+    TEST_LOCK.lock()
+}
+
+#[cfg(test)]
+pub fn reset_test_state() {
+    *LAST_KEYBOARD_SCREENSHOT.lock() = None;
+    *PENDING_KEYBOARD_EVENT.lock() = None;
+}
+
 pub fn take_pending_keyboard_event() -> Option<i64> {
+    let mut pending = PENDING_KEYBOARD_EVENT.lock();
     if keyboard_debounce_active() {
-        PENDING_KEYBOARD_EVENT.lock().take()
+        pending.take()
     } else {
+        pending.take();
         None
     }
 }
@@ -33,11 +49,32 @@ fn keyboard_debounce_active() -> bool {
 
 pub fn is_screenshot_filename(name: &str) -> bool {
     let lower = name.to_lowercase();
-    (lower.contains("screenshot") || lower.contains("screen shot") || lower.starts_with("snip"))
-        && (lower.ends_with(".png")
-            || lower.ends_with(".jpg")
-            || lower.ends_with(".jpeg")
-            || lower.ends_with(".webp"))
+    if lower.ends_with(".png")
+        || lower.ends_with(".jpg")
+        || lower.ends_with(".jpeg")
+        || lower.ends_with(".webp")
+    {
+        if lower.contains("screenshot")
+            || lower.contains("screen shot")
+            || lower.contains("스크린샷")
+            || lower.contains("화면 캡처")
+            || lower.contains("화면캡처")
+            || lower.starts_with("snip")
+            || lower.starts_with("capture d")
+            || lower.contains("bildschirmfoto")
+        {
+            return true;
+        }
+    }
+    false
+}
+
+fn is_image_filename(name: &str) -> bool {
+    let lower = name.to_lowercase();
+    lower.ends_with(".png")
+        || lower.ends_with(".jpg")
+        || lower.ends_with(".jpeg")
+        || lower.ends_with(".webp")
 }
 
 pub fn watch_paths() -> Vec<PathBuf> {
@@ -96,7 +133,11 @@ pub fn spawn_screenshot_watcher(
                 }
 
                 while let Ok(event) = watch_rx.recv() {
-                    if !matches!(event.kind, EventKind::Create(_)) {
+                    let relevant = matches!(
+                        event.kind,
+                        EventKind::Create(_) | EventKind::Modify(_)
+                    );
+                    if !relevant {
                         continue;
                     }
 
@@ -104,11 +145,15 @@ pub fn spawn_screenshot_watcher(
                         let Some(name) = path.file_name().and_then(|n| n.to_str()) else {
                             continue;
                         };
+
+                        let during_keyboard = keyboard_debounce_active();
                         if !is_screenshot_filename(name) {
-                            continue;
+                            if !(during_keyboard && is_image_filename(name)) {
+                                continue;
+                            }
                         }
 
-                        if keyboard_debounce_active() {
+                        if during_keyboard {
                             tracing::debug!(path = %path.display(), "screenshot file during keyboard debounce");
                         }
 

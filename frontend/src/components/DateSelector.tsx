@@ -41,7 +41,7 @@ export function DateSelector({ selectedDate, onChange, availableDates }: Props) 
 
         <div className="flex-1 min-w-[200px]">
           <label className="block relative">
-            <span className="block text-base font-semibold pointer-events-none">
+            <span className="block text-base font-semibold text-text pointer-events-none">
               {formatDateKo(selectedDate)}
             </span>
             <input
@@ -96,7 +96,7 @@ export function DateSelector({ selectedDate, onChange, availableDates }: Props) 
               onClick={() => onChange(day)}
               className={`shrink-0 flex flex-col items-center min-w-[3rem] px-2 py-1.5 rounded-lg text-xs border transition-colors ${
                 selected
-                  ? "bg-accent text-white border-accent"
+                  ? "bg-accent text-accent-foreground border-accent"
                   : hasData
                     ? "border-border hover:bg-surface text-text"
                     : "border-border/50 text-text-muted hover:bg-surface"
@@ -112,7 +112,7 @@ export function DateSelector({ selectedDate, onChange, availableDates }: Props) 
                 className={`w-1 h-1 rounded-full mt-0.5 ${
                   hasData
                     ? selected
-                      ? "bg-white"
+                      ? "bg-accent-foreground"
                       : "bg-accent"
                     : "bg-transparent"
                 }`}

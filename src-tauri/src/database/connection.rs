@@ -72,6 +72,14 @@ impl Database {
         conn.execute_batch(SCHEMA)
             .context("failed to initialize database schema")?;
 
+        conn.execute_batch(
+            "PRAGMA journal_mode=WAL;
+             PRAGMA synchronous=NORMAL;
+             PRAGMA temp_store=MEMORY;
+             PRAGMA cache_size=-8000;",
+        )
+        .context("failed to apply sqlite pragmas")?;
+
         tracing::info!(path = %path.display(), "database initialized");
 
         Ok(Self {
