@@ -33,7 +33,7 @@ pub fn run() {
         .with(tracing_subscriber::fmt::layer())
         .init();
 
-    tauri::Builder::default()
+    let builder = tauri::Builder::default()
         .plugin(tauri_plugin_process::init())
         .plugin(tauri_plugin_updater::Builder::new().build())
         .plugin(tauri_plugin_shell::init())
@@ -44,11 +44,15 @@ pub fn run() {
         .plugin(tauri_plugin_dialog::init())
         .on_menu_event(|app, event| {
             menu::handle_menu_event(app, event.id.as_ref());
-        })
-        .on_web_content_process_terminate(|webview| {
-            tracing::error!("webview process terminated — reloading UI");
-            let _ = webview.eval("window.location.reload()");
-        })
+        });
+
+    #[cfg(target_os = "macos")]
+    let builder = builder.on_web_content_process_terminate(|webview| {
+        tracing::error!("webview process terminated — reloading UI");
+        let _ = webview.eval("window.location.reload()");
+    });
+
+    builder
         .setup(|app| {
             let settings = load_settings();
 
@@ -160,6 +164,7 @@ pub fn run() {
                     tracing::info!("window hidden — collector keeps running in tray");
                 }
             }
+            #[cfg(target_os = "macos")]
             RunEvent::Reopen { .. } => {
                 menu::show_main_window(app_handle);
             }
