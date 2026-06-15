@@ -77,7 +77,7 @@ npm run tauri:build
 | OS | 결과물 |
 |----|--------|
 | macOS | `src-tauri/target/release/bundle/dmg/TraceDesk_*.dmg` (설치용), `bundle/macos/TraceDesk.app` |
-| Windows | `src-tauri/target/release/bundle/nsis/*.exe` 또는 `bundle/msi/*.msi` |
+| Windows | `src-tauri/target/release/bundle/nsis/*-setup.exe` (설치용) |
 | Linux | `src-tauri/target/release/bundle/deb/` 등 |
 
 빌드만 하면 설치 창은 **자동으로 뜨지 않습니다**. 생성된 파일을 직접 열거나:
@@ -124,11 +124,11 @@ npm run tauri signer generate -- -w src-tauri/.tauri/tracedesk.key -f
 
 ```bash
 # Cargo.toml · tauri.conf.json · package.json 버전을 맞춘 후
-git tag v0.1.1
-git push origin v0.1.1
+git tag v0.1.2
+git push origin v0.1.2
 ```
 
-`.github/workflows/release.yml`이 DMG·업데이트 번들·`latest.json`을 Release에 올립니다.
+`.github/workflows/release.yml`이 **macOS (Apple Silicon) + Windows (x64)** 설치 파일·업데이트 번들·`latest.json`을 Release에 올립니다.
 
 로컬 서명 빌드:
 
