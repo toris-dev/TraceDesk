@@ -10,9 +10,18 @@ export type MascotMood =
 
 export const MASCOT_SRC = `${import.meta.env.BASE_URL}mascot/turtle.png`;
 export const MASCOT_ERROR_SRC = `${import.meta.env.BASE_URL}mascot/turtle-error.png`;
+/** Rounded squircle app icon — optimized for UI (128/256px). */
+export const MASCOT_ICON_SRC = `${import.meta.env.BASE_URL}mascot/turtle-icon-128.png`;
+export const MASCOT_ICON_SRC_2X = `${import.meta.env.BASE_URL}mascot/turtle-icon-256.png`;
+export const MASCOT_ICON_SVG = `${import.meta.env.BASE_URL}mascot/turtle-icon.svg`;
 
 export function mascotSrcForMood(mood: MascotMood): string {
   return mood === "confused" ? MASCOT_ERROR_SRC : MASCOT_SRC;
+}
+
+/** App icon with border-radius — use in logo, favicon, compact slots. */
+export function mascotIconSrc(pixelRatio = 1): string {
+  return pixelRatio >= 2 ? MASCOT_ICON_SRC_2X : MASCOT_ICON_SRC;
 }
 
 export const MOOD_MESSAGES: Record<MascotMood, string[]> = {

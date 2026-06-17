@@ -16,7 +16,8 @@ use tokio::sync::watch;
 
 const POLL_INTERVAL: Duration = Duration::from_secs(1);
 const IDLE_THRESHOLD_SECS: u64 = 300;
-const SUMMARY_INTERVAL: Duration = Duration::from_secs(60);
+const SUMMARY_INTERVAL: Duration = Duration::from_secs(300);
+const SCREENSHOT_QUEUE_CAP: usize = 16;
 
 pub struct CollectorAgent {
     repository: Arc<Repository>,
@@ -65,7 +66,7 @@ impl CollectorAgent {
         self.repository.insert_event(&startup_event)?;
         tracing::info!("activity collector started");
 
-        let (screenshot_tx, screenshot_rx) = crossbeam_channel::unbounded();
+        let (screenshot_tx, screenshot_rx) = crossbeam_channel::bounded(SCREENSHOT_QUEUE_CAP);
 
         if settings.enable_input_monitoring {
             tracing::info!("keyboard input monitoring enabled");

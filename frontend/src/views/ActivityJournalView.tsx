@@ -30,7 +30,7 @@ export function ActivityJournalView({
 
   return (
     <div className="space-y-6 max-w-[1400px]">
-      <div className="rounded-2xl border border-border bg-gradient-to-br from-accent/10 via-surface-elevated to-surface p-6 md:p-8">
+      <div className="td-panel bg-gradient-to-br from-[var(--cyber-cyan-dim)] via-[var(--cyber-panel-bg)] to-transparent p-6 md:p-8">
         <div className="flex flex-wrap items-start justify-between gap-4">
           <div>
             <p className="text-sm text-text-muted flex items-center gap-2">
@@ -59,7 +59,7 @@ export function ActivityJournalView({
         </div>
       </div>
 
-      <section className="rounded-2xl border border-border bg-surface-elevated p-5 md:p-6">
+      <section className="td-panel p-5 md:p-6">
         <div className="flex flex-wrap items-center justify-between gap-3 mb-4">
           <div>
             <h3 className="font-semibold text-text">하루 타임라인</h3>

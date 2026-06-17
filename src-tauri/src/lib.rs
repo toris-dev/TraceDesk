@@ -12,7 +12,7 @@ mod os;
 mod settings;
 mod settings_commands;
 mod state;
-mod system;
+pub mod system;
 mod tray;
 
 use crate::collector::input_bridge::{sync_input_monitoring, InputChannel};

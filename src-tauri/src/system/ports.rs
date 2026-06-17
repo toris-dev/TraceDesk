@@ -3,6 +3,8 @@ use serde::Serialize;
 use std::collections::HashMap;
 use std::process::Command;
 
+const MAX_PORTS: usize = 120;
+
 #[derive(Debug, Clone, Serialize)]
 pub struct PortInfo {
     pub port: u16,
@@ -49,7 +51,6 @@ fn list_ports_unix(self_pid: u32) -> Result<Vec<PortInfo>> {
         let pid = parts[1].parse::<u32>().ok();
         let name_col = parts.get(8).copied().unwrap_or("");
 
-        // NAME format: *:3847 (LISTEN) or 127.0.0.1:5173 (LISTEN)
         let (address, port, protocol) = parse_lsof_name(name_col);
         let Some(port) = port else { continue };
 
@@ -67,6 +68,10 @@ fn list_ports_unix(self_pid: u32) -> Result<Vec<PortInfo>> {
             pid,
             is_tracedesk: pid == Some(self_pid),
         });
+
+        if ports.len() >= MAX_PORTS {
+            break;
+        }
     }
 
     ports.sort_by_key(|p| p.port);
@@ -86,6 +91,9 @@ fn parse_lsof_name(name_col: &str) -> (String, Option<u16>, String) {
 
 #[cfg(windows)]
 fn list_ports_windows(self_pid: u32) -> Result<Vec<PortInfo>> {
+    // One tasklist call for all PIDs — avoids spawning tasklist per port (very slow on Windows).
+    let pid_names = build_windows_pid_name_map();
+
     let output = Command::new("netstat")
         .args(["-ano"])
         .output()
@@ -93,8 +101,12 @@ fn list_ports_windows(self_pid: u32) -> Result<Vec<PortInfo>> {
 
     let text = String::from_utf8_lossy(&output.stdout);
     let mut ports = Vec::new();
+    let mut seen = HashMap::new();
 
     for line in text.lines() {
+        if ports.len() >= MAX_PORTS {
+            break;
+        }
         let line = line.trim();
         if !line.contains("LISTENING") {
             continue;
@@ -110,11 +122,17 @@ fn list_ports_windows(self_pid: u32) -> Result<Vec<PortInfo>> {
         let (address, port) = parse_windows_local(local);
         let Some(port) = port else { continue };
 
+        let key = format!("{proto}:{address}:{port}");
+        if seen.contains_key(&key) {
+            continue;
+        }
+        seen.insert(key, ());
+
         ports.push(PortInfo {
             port,
             protocol: proto,
             address,
-            process: pid.and_then(|p| windows_process_name(p)),
+            process: pid.and_then(|p| pid_names.get(&p).cloned()),
             pid,
             is_tracedesk: pid == Some(self_pid),
         });
@@ -126,23 +144,26 @@ fn list_ports_windows(self_pid: u32) -> Result<Vec<PortInfo>> {
 
 #[cfg(windows)]
 fn parse_windows_local(local: &str) -> (String, Option<u16>) {
-    if let Some(after) = local.rsplit(':').next() {
-        if let Ok(port) = after.parse::<u16>() {
-            let addr = local.trim_end_matches(&format!(":{port}")).to_string();
-            return (addr, Some(port));
-        }
-    }
-    (local.to_string(), None)
+    super::ports_parse::parse_windows_local(local)
 }
 
 #[cfg(windows)]
-fn windows_process_name(pid: u32) -> Option<String> {
-    Command::new("tasklist")
-        .args(["/FI", &format!("PID eq {pid}"), "/FO", "CSV", "/NH"])
+fn build_windows_pid_name_map() -> HashMap<u32, String> {
+    let mut map = HashMap::new();
+    let Ok(output) = Command::new("tasklist")
+        .args(["/FO", "CSV", "/NH"])
         .output()
-        .ok()
-        .and_then(|o| String::from_utf8(o.stdout).ok())
-        .and_then(|s| s.lines().next().map(|l| l.trim_matches('"').to_string()))
+    else {
+        return map;
+    };
+
+    let text = String::from_utf8_lossy(&output.stdout);
+    for line in text.lines() {
+        if let Some((pid, name)) = super::ports_parse::parse_tasklist_csv_line(line) {
+            map.insert(pid, name);
+        }
+    }
+    map
 }
 
 /// LISTEN 포트를 점유한 프로세스 종료 (TraceDesk 자체 PID는 보호)

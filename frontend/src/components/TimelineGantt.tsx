@@ -1,5 +1,6 @@
 import type { FullTimelineItem, IdleAnalysis } from "../api/client";
 import { formatSeconds } from "../api/client";
+import { GANTT_PALETTE, CYBER } from "../theme/cyberTokens";
 
 interface Props {
   items: FullTimelineItem[];
@@ -9,10 +10,7 @@ interface Props {
 }
 
 const APP_COLORS: Record<string, string> = {};
-const PALETTE = [
-  "#6366f1", "#22c55e", "#f59e0b", "#ef4444",
-  "#06b6d4", "#ec4899", "#84cc16", "#a855f7",
-];
+const PALETTE = [...GANTT_PALETTE];
 
 function colorForApp(app: string): string {
   if (!APP_COLORS[app]) {
@@ -175,8 +173,8 @@ export function TimelineGantt({
             {markers.map((m, i) => {
               const pos = (timeToSeconds(m.start) / DAY_SECONDS) * 100;
               const color =
-                m.kind === "copy" ? "#22c55e" :
-                m.kind === "paste" ? "#f59e0b" : "#ef4444";
+                m.kind === "copy" ? CYBER.green :
+                m.kind === "paste" ? CYBER.amber : CYBER.magenta;
               return (
                 <div
                   key={i}

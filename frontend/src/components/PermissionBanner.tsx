@@ -64,9 +64,15 @@ export function PermissionBanner() {
 
   useEffect(() => {
     load();
-    const id = setInterval(load, 10_000);
-    return () => clearInterval(id);
   }, [load]);
+
+  useEffect(() => {
+    if (!status || !settings || !settings.setup_completed) return;
+    if (!needsAttention(status, settings)) return;
+
+    const id = setInterval(load, 30_000);
+    return () => clearInterval(id);
+  }, [status, settings, load]);
 
   if (!status || !settings || !settings.setup_completed) {
     return null;

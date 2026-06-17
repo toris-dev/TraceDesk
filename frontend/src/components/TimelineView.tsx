@@ -1,21 +1,13 @@
 import type { TimelineSegment } from "../api/client";
 import { formatSeconds } from "../api/client";
+import { GANTT_PALETTE } from "../theme/cyberTokens";
 
 interface Props {
   segments: TimelineSegment[];
 }
 
 const APP_COLORS: Record<string, string> = {};
-const PALETTE = [
-  "#6366f1",
-  "#22c55e",
-  "#f59e0b",
-  "#ef4444",
-  "#06b6d4",
-  "#ec4899",
-  "#84cc16",
-  "#a855f7",
-];
+const PALETTE = [...GANTT_PALETTE];
 
 function colorForApp(app: string): string {
   if (!APP_COLORS[app]) {

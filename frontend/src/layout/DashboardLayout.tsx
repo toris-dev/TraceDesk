@@ -1,9 +1,10 @@
 import type { ReactNode } from "react";
 import { AppLogo } from "../components/AppLogo";
-import { MASCOT_SRC } from "../components/mascot";
+import { MASCOT_ICON_SRC } from "../components/mascot";
 import { useI18n } from "../i18n";
 
 export type DashboardPage =
+  | "monitor"
   | "journal"
   | "overview"
   | "actions"
@@ -13,6 +14,7 @@ export type DashboardPage =
   | "settings";
 
 const DASHBOARD_PAGES: DashboardPage[] = [
+  "monitor",
   "journal",
   "overview",
   "actions",
@@ -27,6 +29,7 @@ export function isDashboardPage(value: string): value is DashboardPage {
 }
 
 const NAV_IDS: { id: DashboardPage; labelKey: string; descKey: string; icon: string }[] = [
+  { id: "monitor", labelKey: "nav.monitor", descKey: "nav.monitorDesc", icon: "◈" },
   { id: "journal", labelKey: "nav.journal", descKey: "nav.journalDesc", icon: "◎" },
   { id: "overview", labelKey: "nav.overview", descKey: "nav.overviewDesc", icon: "◫" },
   { id: "actions", labelKey: "nav.actions", descKey: "nav.actionsDesc", icon: "⚡" },
@@ -65,8 +68,8 @@ export function DashboardLayout({
   const current = NAV_IDS.find((n) => n.id === page);
 
   return (
-    <div className="h-screen flex overflow-hidden bg-surface">
-      <aside className="hidden md:flex w-60 shrink-0 h-full flex-col border-r border-border bg-surface-elevated/80">
+    <div className="h-screen flex overflow-hidden cyber-shell">
+      <aside className="hidden md:flex w-60 shrink-0 h-full flex-col border-r cyber-sidebar">
         <div className="p-5 border-b border-border">
           <AppLogo subtitle={subtitle} />
         </div>
@@ -81,27 +84,31 @@ export function DashboardLayout({
                 key={item.id}
                 type="button"
                 onClick={() => onPageChange(item.id)}
-                className={`w-full text-left rounded-xl px-3 py-3 transition-all ${
+                className={`w-full text-left rounded-xl px-3 py-3 transition-all border ${
                   active
-                    ? "bg-accent/15 border border-accent/40 shadow-sm shadow-accent/10"
-                    : "border border-transparent hover:bg-surface hover:border-border"
+                    ? "cyber-nav-active text-text"
+                    : "border-transparent hover:border-[var(--cyber-panel-border)] hover:bg-[var(--cyber-cyan-dim)]"
                 }`}
               >
                 <div className="flex items-center gap-3">
                   <span
                     className={`flex h-9 w-9 items-center justify-center rounded-lg text-base ${
-                      active ? "bg-accent text-accent-foreground" : "bg-surface text-text-muted"
+                      active ? "cyber-nav-icon-active" : "cyber-nav-icon text-text-muted"
                     }`}
                   >
                     {item.icon}
                   </span>
                   <div className="min-w-0 flex-1">
                     <div className="flex items-center gap-2">
-                      <span className={`text-sm font-semibold ${active ? "text-text" : "text-text-muted"}`}>
+                      <span
+                        className={`text-sm font-semibold font-display tracking-wide ${
+                          active ? "text-[var(--cyber-cyan)]" : "text-text-muted"
+                        }`}
+                      >
                         {t(item.labelKey)}
                       </span>
                       {badge != null && badge > 0 && (
-                        <span className="rounded-full bg-accent/20 text-accent text-[10px] px-1.5 py-0.5 font-medium">
+                        <span className="rounded-full bg-[var(--cyber-cyan-dim)] text-[var(--cyber-cyan)] text-[10px] px-1.5 py-0.5 font-data font-medium">
                           {badge > 99 ? "99+" : badge}
                         </span>
                       )}
@@ -115,9 +122,9 @@ export function DashboardLayout({
         </nav>
 
         <div className="p-4 border-t border-border">
-          <div className="flex items-center gap-2 text-xs text-text-muted">
+          <div className="flex items-center gap-2 text-xs font-data text-text-muted">
             <span
-              className={`w-2 h-2 rounded-full ${connected ? "bg-success animate-pulse" : "bg-red-500"}`}
+              className={`w-2 h-2 rounded-full ${connected ? "bg-success animate-pulse shadow-[0_0_8px_var(--cyber-green)]" : "bg-danger"}`}
             />
             {connected ? t("status.collecting") : t("status.disconnected")}
           </div>
@@ -125,13 +132,13 @@ export function DashboardLayout({
       </aside>
 
       <div className="flex-1 flex flex-col min-w-0 min-h-0">
-        <header className="shrink-0 z-20 border-b border-border bg-[var(--color-header-backdrop)] backdrop-blur-md">
+        <header className="shrink-0 z-20 border-b cyber-header backdrop-blur-md">
           <div className="px-4 md:px-8 py-4 flex flex-wrap items-center justify-between gap-4">
             <div className="md:hidden">
               <AppLogo subtitle={subtitle} />
             </div>
             <div className="hidden md:block">
-              <h2 className="text-xl font-semibold text-text">
+              <h2 className="text-xl font-display font-semibold tracking-wide text-[var(--cyber-cyan)]">
                 {current ? t(current.labelKey) : ""}
               </h2>
               <p className="text-sm text-text-muted">
@@ -147,7 +154,7 @@ export function DashboardLayout({
                   type="button"
                   onClick={onRefresh}
                   disabled={refreshing}
-                  className="rounded-lg border border-border px-3 py-2 text-sm text-text-muted hover:text-text hover:bg-surface-elevated disabled:opacity-50"
+                  className="rounded-lg border border-border px-3 py-2 text-sm font-data text-text-muted hover:text-[var(--cyber-cyan)] hover:border-[var(--cyber-cyan)] hover:bg-[var(--cyber-cyan-dim)] disabled:opacity-50 transition-colors"
                   title={t("status.refreshData")}
                 >
                   {refreshing ? "…" : "↻"}
@@ -158,7 +165,7 @@ export function DashboardLayout({
                 title={connected ? t("status.bgCollecting") : t("status.disconnected")}
               >
                 <span
-                  className={`w-2 h-2 rounded-full ${connected ? "bg-success animate-pulse" : "bg-red-500"}`}
+                  className={`w-2 h-2 rounded-full ${connected ? "bg-success animate-pulse" : "bg-danger"}`}
                 />
               </div>
             </div>
@@ -170,10 +177,10 @@ export function DashboardLayout({
                 key={item.id}
                 type="button"
                 onClick={() => onPageChange(item.id)}
-                className={`shrink-0 rounded-full px-4 py-2 text-sm border transition-colors ${
+                className={`shrink-0 rounded-full px-4 py-2 text-sm font-display tracking-wide border transition-colors ${
                   page === item.id
-                    ? "bg-accent text-accent-foreground border-accent"
-                    : "border-border text-text-muted"
+                    ? "bg-[var(--cyber-cyan)] text-[var(--td-accent-foreground)] border-[var(--cyber-cyan)]"
+                    : "border-border text-text-muted hover:border-[var(--cyber-cyan)]"
                 }`}
               >
                 {t(item.labelKey)}
@@ -184,9 +191,9 @@ export function DashboardLayout({
 
         <main className="flex-1 min-h-0 overflow-y-auto px-4 md:px-8 py-6">{children}</main>
 
-        <footer className="shrink-0 border-t border-border px-8 py-4 flex items-center justify-between text-xs text-text-muted">
+        <footer className="shrink-0 border-t border-border px-8 py-4 flex items-center justify-between text-xs font-data text-text-muted">
           <div className="flex items-center gap-2">
-            <img src={MASCOT_SRC} alt="" className="w-5 h-5 opacity-50 mascot-float" />
+            <img src={MASCOT_ICON_SRC} alt="" className="w-5 h-5 rounded-md object-cover opacity-60 mascot-float" />
             TraceDesk · {t("common.localStorage")}
           </div>
           <span className="hidden sm:inline">{t("common.tagline")}</span>
@@ -197,5 +204,13 @@ export function DashboardLayout({
 }
 
 export function isActivityPage(page: DashboardPage): boolean {
-  return ["journal", "overview", "actions", "timeline", "analytics"].includes(page);
+  return ["monitor", "journal", "overview", "actions", "timeline", "analytics"].includes(page);
+}
+
+/** Activity bundle auto-refresh cadence — monitor/analytics poll less often. */
+export function activityRefreshInterval(page: DashboardPage): number {
+  if (page === "monitor") return 120_000;
+  if (page === "analytics") return 120_000;
+  if (page === "overview") return 90_000;
+  return 75_000;
 }

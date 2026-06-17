@@ -3,8 +3,12 @@ use anyhow::Result;
 use chrono::Utc;
 use serde::Serialize;
 use std::sync::{Mutex, MutexGuard};
-use std::time::Duration;
-use sysinfo::{Pid, System};
+use std::time::{Duration, Instant};
+use sysinfo::{Pid, ProcessesToUpdate, System};
+
+const PROCESS_REFRESH_EVERY: u64 = 6;
+const PORTS_REFRESH_SECS: u64 = 30;
+const TOP_PROCESS_LIMIT: usize = 15;
 
 #[derive(Debug, Clone, Serialize)]
 pub struct MemoryInfo {
@@ -33,42 +37,84 @@ pub struct SystemSnapshot {
     pub port_count: usize,
 }
 
-pub fn collect_snapshot(sys: &mut System) -> Result<SystemSnapshot> {
-    sys.refresh_cpu_all();
-    sys.refresh_memory();
+/// Cached system monitor state — avoids re-scanning all processes and ports every poll.
+pub struct SystemMonitor {
+    sys: System,
+    tick: u64,
+    self_pid: u32,
+    top_processes: Vec<ProcessInfo>,
+    tracedesk: Option<ProcessInfo>,
+    ports: Vec<PortInfo>,
+    port_count: usize,
+    last_ports_at: Option<Instant>,
+}
 
-    let cpu_usage = sys.global_cpu_usage();
+impl SystemMonitor {
+    fn new(sys: System) -> Self {
+        Self {
+            sys,
+            tick: 0,
+            self_pid: std::process::id(),
+            top_processes: Vec::new(),
+            tracedesk: None,
+            ports: Vec::new(),
+            port_count: 0,
+            last_ports_at: None,
+        }
+    }
 
-    let total = sys.total_memory() / 1024 / 1024;
-    let available = sys.available_memory() / 1024 / 1024;
-    let used = total.saturating_sub(available);
+    fn should_refresh_ports(&self) -> bool {
+        match self.last_ports_at {
+            None => true,
+            Some(t) => t.elapsed() >= Duration::from_secs(PORTS_REFRESH_SECS),
+        }
+    }
+
+    fn refresh_processes(&mut self) {
+        self.sys
+            .refresh_processes(ProcessesToUpdate::All, true);
+
+        self.tracedesk = self
+            .sys
+            .process(Pid::from_u32(self.self_pid))
+            .map(|p| process_info(self.self_pid, p));
+
+        self.top_processes = compute_top_processes(&self.sys, TOP_PROCESS_LIMIT);
+    }
+
+    fn refresh_ports(&mut self) -> Result<()> {
+        let ports = ports::list_listening_ports(self.self_pid)?;
+        self.port_count = ports.len();
+        self.ports = ports;
+        self.last_ports_at = Some(Instant::now());
+        Ok(())
+    }
+}
+
+pub fn collect_snapshot(mon: &mut SystemMonitor) -> Result<SystemSnapshot> {
+    mon.tick += 1;
+
+    mon.sys.refresh_cpu_all();
+    mon.sys.refresh_memory();
+
+    let cpu_usage = mon.sys.global_cpu_usage();
+
+    let total = mon.sys.total_memory() / 1024 / 1024;
+    let available = mon.sys.available_memory() / 1024 / 1024;
+    let used = mon.sys.used_memory() / 1024 / 1024;
     let used_percent = if total > 0 {
         (used as f32 / total as f32) * 100.0
     } else {
         0.0
     };
 
-    let self_pid = std::process::id();
-    sys.refresh_processes(sysinfo::ProcessesToUpdate::All, true);
+    if mon.tick == 1 || mon.tick % PROCESS_REFRESH_EVERY == 0 {
+        mon.refresh_processes();
+    }
 
-    let tracedesk = sys
-        .process(Pid::from_u32(self_pid))
-        .map(|p| process_info(self_pid, p));
-
-    let mut processes: Vec<ProcessInfo> = sys
-        .processes()
-        .iter()
-        .map(|(pid, proc_)| process_info(pid.as_u32(), proc_))
-        .collect();
-
-    processes.sort_by(|a, b| {
-        b.cpu_percent
-            .partial_cmp(&a.cpu_percent)
-            .unwrap_or(std::cmp::Ordering::Equal)
-    });
-    let top_processes: Vec<_> = processes.into_iter().take(15).collect();
-
-    let ports = ports::list_listening_ports(self_pid)?;
+    if mon.should_refresh_ports() {
+        mon.refresh_ports()?;
+    }
 
     Ok(SystemSnapshot {
         timestamp: Utc::now().format("%Y-%m-%dT%H:%M:%S%.3fZ").to_string(),
@@ -79,11 +125,37 @@ pub fn collect_snapshot(sys: &mut System) -> Result<SystemSnapshot> {
             available_mb: available,
             used_percent,
         },
-        tracedesk,
-        port_count: ports.len(),
-        ports,
-        top_processes,
+        tracedesk: mon.tracedesk.clone(),
+        port_count: mon.port_count,
+        ports: mon.ports.clone(),
+        top_processes: mon.top_processes.clone(),
     })
+}
+
+fn compute_top_processes(sys: &System, limit: usize) -> Vec<ProcessInfo> {
+    let mut processes: Vec<ProcessInfo> = sys
+        .processes()
+        .iter()
+        .map(|(pid, proc_)| process_info(pid.as_u32(), proc_))
+        .collect();
+
+    let n = processes.len();
+    if n > limit {
+        let k = limit.saturating_sub(1);
+        processes.select_nth_unstable_by(k, |a, b| {
+            b.cpu_percent
+                .partial_cmp(&a.cpu_percent)
+                .unwrap_or(std::cmp::Ordering::Equal)
+        });
+        processes.truncate(limit);
+    }
+
+    processes.sort_by(|a, b| {
+        b.cpu_percent
+            .partial_cmp(&a.cpu_percent)
+            .unwrap_or(std::cmp::Ordering::Equal)
+    });
+    processes
 }
 
 fn process_info(pid: u32, proc_: &sysinfo::Process) -> ProcessInfo {
@@ -95,13 +167,20 @@ fn process_info(pid: u32, proc_: &sysinfo::Process) -> ProcessInfo {
     }
 }
 
-pub fn lock_system<'a>(sys: &'a Mutex<System>) -> MutexGuard<'a, System> {
-    sys.lock().expect("system metrics mutex poisoned")
+pub fn lock_monitor<'a>(mon: &'a Mutex<SystemMonitor>) -> MutexGuard<'a, SystemMonitor> {
+    mon.lock().expect("system monitor mutex poisoned")
 }
 
-pub fn create_system() -> System {
-    let mut sys = System::new_all();
-    sys.refresh_all();
-    std::thread::sleep(Duration::from_millis(300));
-    sys
+pub fn create_monitor() -> SystemMonitor {
+    let mut sys = System::new();
+    sys.refresh_cpu_all();
+    sys.refresh_memory();
+    std::thread::sleep(Duration::from_millis(200));
+
+    let mut mon = SystemMonitor::new(sys);
+    mon.refresh_processes();
+    if let Err(e) = mon.refresh_ports() {
+        tracing::warn!("initial port scan failed: {e:#}");
+    }
+    mon
 }

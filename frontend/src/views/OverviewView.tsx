@@ -13,6 +13,7 @@ import { ActivityGraph } from "../components/ActivityGraph";
 import { ProductivityPanel } from "../components/ProductivityPanel";
 import { TimelineGantt } from "../components/TimelineGantt";
 import type { DashboardPage } from "../layout/DashboardLayout";
+import { CYBER } from "../theme/cyberTokens";
 
 interface Props {
   stats: DailyStatistics;
@@ -41,10 +42,10 @@ function KpiCard({
     <button
       type="button"
       onClick={onClick}
-      className="group rounded-2xl border border-border bg-surface-elevated p-5 text-left transition-all hover:border-accent/40 hover:shadow-lg hover:shadow-accent/5 active:scale-[0.98]"
+      className="group td-panel td-panel-hover p-5 text-left active:scale-[0.98]"
     >
-      <p className="text-sm text-text-muted mb-2">{label}</p>
-      <p className="text-3xl font-bold tracking-tight" style={{ color: accent }}>
+      <p className="td-label mb-2">{label}</p>
+      <p className="text-3xl td-kpi-value tracking-tight" style={{ color: accent }}>
         {value}
       </p>
       {onClick && (
@@ -72,11 +73,13 @@ export function OverviewView({
 
   return (
     <div className="space-y-6 max-w-[1400px]">
-      <div className="rounded-2xl border border-border bg-gradient-to-br from-surface-elevated to-surface p-6 md:p-8">
+      <div className="td-panel p-6 md:p-8 bg-gradient-to-br from-[var(--cyber-panel-bg)] to-transparent">
         <div className="flex flex-wrap items-end justify-between gap-4 mb-6">
           <div>
-            <p className="text-sm text-text-muted">{dateLabel} 활동 요약</p>
-            <p className="text-4xl font-bold mt-1">{formatDuration(stats.active)}</p>
+            <p className="td-label">{dateLabel} 활동 요약</p>
+            <p className="text-4xl font-display font-bold mt-1 text-[var(--cyber-cyan)]">
+              {formatDuration(stats.active)}
+            </p>
             <p className="text-sm text-text-muted mt-1">
               하루 대비 {activePct.toFixed(1)}% 활동 · 유휴 {formatDuration(stats.idle)}
             </p>
@@ -92,7 +95,7 @@ export function OverviewView({
         </div>
         <div className="h-2 rounded-full bg-border overflow-hidden">
           <div
-            className="h-full rounded-full bg-gradient-to-r from-accent to-emerald-500 transition-all duration-700"
+            className="h-full rounded-full bg-gradient-to-r from-[var(--cyber-cyan)] to-[var(--cyber-green)] transition-all duration-700 shadow-[0_0_12px_var(--cyber-cyan-dim)]"
             style={{ width: `${activePct}%` }}
           />
         </div>
@@ -102,31 +105,31 @@ export function OverviewView({
         <KpiCard
           label="활동"
           value={formatDuration(stats.active)}
-          accent="#6366f1"
+          accent={CYBER.cyan}
           onClick={() => onNavigate("analytics")}
         />
         <KpiCard
           label="복사"
           value={`${stats.copy}`}
-          accent="#22c55e"
+          accent={CYBER.green}
           onClick={() => onNavigate("actions")}
         />
         <KpiCard
           label="붙여넣기"
           value={`${stats.paste}`}
-          accent="#f59e0b"
+          accent={CYBER.amber}
           onClick={() => onNavigate("actions")}
         />
         <KpiCard
           label="캡처"
           value={`${stats.screenshot}`}
-          accent="#ef4444"
+          accent={CYBER.magenta}
           onClick={() => onNavigate("actions")}
         />
         <KpiCard
           label="유휴"
           value={formatDuration(stats.idle)}
-          accent="#94a3b8"
+          accent={CYBER.muted}
           onClick={() => onNavigate("analytics")}
         />
       </div>
@@ -149,9 +152,9 @@ export function OverviewView({
           )}
         </div>
 
-        <section className="rounded-2xl border border-border bg-surface-elevated p-6">
+        <section className="td-panel p-6">
           <div className="flex items-center justify-between mb-4">
-            <h3 className="font-semibold">생산성</h3>
+            <h3 className="font-display font-semibold tracking-wide text-[var(--cyber-cyan)]">생산성</h3>
             <button
               type="button"
               onClick={() => onNavigate("analytics")}
@@ -169,19 +172,19 @@ export function OverviewView({
       </div>
 
       <div className="grid lg:grid-cols-2 gap-6">
-        <section className="rounded-2xl border border-border bg-surface-elevated p-6">
-          <h3 className="font-semibold mb-4">시간별 집중도</h3>
+        <section className="td-panel p-6">
+          <h3 className="font-display font-semibold tracking-wide text-[var(--cyber-cyan)] mb-4">시간별 집중도</h3>
           <ActivityGraph data={hourly} />
         </section>
-        <section className="rounded-2xl border border-border bg-surface-elevated p-6">
-          <h3 className="font-semibold mb-4">시간별 행동</h3>
+        <section className="td-panel p-6">
+          <h3 className="font-display font-semibold tracking-wide text-[var(--cyber-cyan)] mb-4">시간별 행동</h3>
           <ActionChart data={actionHourly} />
         </section>
       </div>
 
-      <section className="rounded-2xl border border-border bg-surface-elevated p-6">
+      <section className="td-panel p-6">
         <div className="flex items-center justify-between mb-4">
-          <h3 className="font-semibold">오늘의 타임라인 미리보기</h3>
+          <h3 className="font-display font-semibold tracking-wide text-[var(--cyber-cyan)]">오늘의 타임라인 미리보기</h3>
           <button
             type="button"
             onClick={() => onNavigate("timeline")}

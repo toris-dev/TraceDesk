@@ -1,15 +1,18 @@
 use crate::activity_item::ActivityItem;
 use crate::analytics::{
     analyze_productivity_from, build_action_hourly_from, build_full_timeline_from,
-    build_hourly_activity_from, build_idle_analysis_from, build_weekly_report,
-    compute_daily_statistics_from, ActionHourlyPoint, DailyStatistics, FullTimelineItem,
-    IdleAnalysis, ProductivityAnalysis, WeeklyReport,
+    build_hourly_activity_from, build_idle_analysis_from, compute_daily_statistics_from,
+    ActionHourlyPoint, DailyStatistics, FullTimelineItem, IdleAnalysis, ProductivityAnalysis,
 };
 use crate::database::models::ApplicationUsage;
 use crate::database::Repository;
 use anyhow::Result;
 use chrono::{Local, NaiveDate};
 use serde::Serialize;
+use serde_json::Value;
+
+/// Max events sent to the UI per bundle — stats/timeline still use the full day.
+const MAX_BUNDLE_EVENTS: usize = 300;
 
 #[derive(Debug, Serialize)]
 pub struct HourlyActivityItem {
@@ -27,7 +30,7 @@ pub struct ActivityBundle {
     pub hourly: Vec<HourlyActivityItem>,
     pub events: Vec<ActivityItem>,
     pub productivity: ProductivityAnalysis,
-    pub weekly: WeeklyReport,
+    pub events_truncated: bool,
 }
 
 pub fn build_activity_bundle(repo: &Repository, date: NaiveDate) -> Result<ActivityBundle> {
@@ -44,9 +47,15 @@ pub fn build_activity_bundle(repo: &Repository, date: NaiveDate) -> Result<Activ
         .into_iter()
         .map(|(hour, activity)| HourlyActivityItem { hour, activity })
         .collect();
-    let weekly = build_weekly_report(repo, date)?;
 
-    let activity_items: Vec<ActivityItem> = events
+    let events_truncated = events.len() > MAX_BUNDLE_EVENTS;
+    let visible_events = if events_truncated {
+        &events[events.len() - MAX_BUNDLE_EVENTS..]
+    } else {
+        &events[..]
+    };
+
+    let activity_items: Vec<ActivityItem> = visible_events
         .iter()
         .map(|e| ActivityItem {
             id: e.id,
@@ -59,7 +68,7 @@ pub fn build_activity_bundle(repo: &Repository, date: NaiveDate) -> Result<Activ
             name: e.application.clone(),
             window_title: e.window_title.clone(),
             duration: e.duration,
-            metadata: e.metadata.clone(),
+            metadata: slim_metadata(e.metadata.clone()),
         })
         .collect();
 
@@ -72,6 +81,17 @@ pub fn build_activity_bundle(repo: &Repository, date: NaiveDate) -> Result<Activ
         hourly,
         events: activity_items,
         productivity,
-        weekly,
+        events_truncated,
     })
+}
+
+/// Drop bulky clipboard preview text from list payloads — detail can refetch if needed.
+fn slim_metadata(meta: Option<Value>) -> Option<Value> {
+    match meta {
+        Some(Value::Object(mut obj)) => {
+            obj.remove("clipboard_preview");
+            Some(Value::Object(obj))
+        }
+        other => other,
+    }
 }

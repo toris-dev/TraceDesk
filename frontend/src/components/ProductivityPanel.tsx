@@ -1,14 +1,7 @@
 import type { ProductivityAnalysis, WeeklyReport } from "../api/client";
+import { GRADE_COLORS } from "../theme/cyberTokens";
 import { useTheme } from "../theme";
 import { TortoiseMascot, scoreToMood } from "./mascot";
-
-const GRADE_COLORS: Record<string, string> = {
-  A: "#22c55e",
-  B: "#6366f1",
-  C: "#f59e0b",
-  D: "#f97316",
-  F: "#ef4444",
-};
 
 interface Props {
   analysis: ProductivityAnalysis;

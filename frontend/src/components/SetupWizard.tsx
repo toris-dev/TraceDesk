@@ -58,7 +58,7 @@ export function SetupWizard({ onComplete }: Props) {
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-overlay backdrop-blur-sm p-4">
-      <div className="w-full max-w-lg rounded-2xl border border-border bg-surface-elevated shadow-2xl overflow-hidden">
+      <div className="w-full max-w-lg td-panel shadow-2xl overflow-hidden">
         <div className="px-6 pt-6 pb-4 border-b border-border flex items-center gap-4">
           <TortoiseMascot
             mood="typing"

@@ -185,7 +185,7 @@ export interface ActivityBundle {
   hourly: HourlyActivity[];
   events: ActivityItem[];
   productivity: ProductivityAnalysis;
-  weekly: WeeklyReport;
+  events_truncated: boolean;
 }
 
 export function getDailyStatistics(date?: string) {

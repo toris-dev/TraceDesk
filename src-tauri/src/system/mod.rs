@@ -1,5 +1,10 @@
 mod metrics;
 mod ports;
+#[cfg(any(windows, test))]
+mod ports_parse;
 
-pub use metrics::{collect_snapshot, create_system, lock_system, SystemSnapshot};
+#[cfg(test)]
+mod metrics_tests;
+
+pub use metrics::{collect_snapshot, create_monitor, lock_monitor, SystemMonitor, SystemSnapshot};
 pub use ports::kill_listener_process;

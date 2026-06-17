@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState, type ReactNode } from "react";
 import type { MascotMood } from "./mascotTypes";
-import { MASCOT_SRC, mascotSrcForMood, pickMessage } from "./mascotTypes";
+import { MASCOT_ICON_SRC, mascotSrcForMood, pickMessage } from "./mascotTypes";
 
 interface Props {
   mood?: MascotMood;
@@ -181,10 +181,10 @@ export function MascotCompanion({ mood, message }: CompanionProps) {
           setDismissed(false);
           setOpen(true);
         }}
-        className="fixed bottom-5 right-5 z-40 w-12 h-12 rounded-full border border-border bg-surface-elevated shadow-lg hover:scale-110 transition-transform overflow-hidden mascot-float"
+        className="fixed bottom-5 right-5 z-40 w-12 h-12 rounded-2xl border border-cyan-500/25 bg-surface-elevated shadow-lg hover:scale-110 transition-transform overflow-hidden mascot-float"
         aria-label="거북이 도우미 열기"
       >
-        <img src={MASCOT_SRC} alt="" className="w-full h-full object-contain p-1" />
+        <img src={MASCOT_ICON_SRC} alt="" className="w-full h-full object-cover" />
       </button>
     );
   }
@@ -195,7 +195,7 @@ export function MascotCompanion({ mood, message }: CompanionProps) {
         open ? "translate-y-0 opacity-100" : "translate-y-4 opacity-0 pointer-events-none"
       }`}
     >
-      <div className="rounded-2xl border border-border bg-surface-elevated/95 backdrop-blur shadow-xl p-3 max-w-[220px]">
+      <div className="td-panel backdrop-blur shadow-xl p-3 max-w-[220px]">
         <div className="flex items-start justify-between gap-2 mb-2">
           <span className="text-[10px] uppercase tracking-wider text-accent font-semibold">
             Trace

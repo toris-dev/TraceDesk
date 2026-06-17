@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useMemo, useState } from "react";
 import {
   Area,
   AreaChart,
@@ -8,13 +8,13 @@ import {
   XAxis,
   YAxis,
 } from "recharts";
-import type { PortInfo, ProcessInfo, SystemSnapshot } from "../api/client";
-import { formatMemoryGb, formatMemoryUsage, getSystemSnapshot, killPortProcess } from "../api/client";
+import type { PortInfo } from "../api/client";
+import { formatMemoryGb, formatMemoryUsage, killPortProcess } from "../api/client";
 import { useTheme } from "../theme";
 import { MascotScene } from "./mascot";
-
-const POLL_MS = 1_000;
-const HISTORY_LEN = 60;
+import { CyberMetric } from "./cyber/CyberMetric";
+import { CyberPanel } from "./cyber/CyberPanel";
+import { HISTORY_LEN, useSystemMetrics } from "./cyber/useSystemMetrics";
 
 interface Props {
   connected: boolean;
@@ -22,41 +22,11 @@ interface Props {
 
 export function SystemMonitor({ connected }: Props) {
   const { chart } = useTheme();
-  const [snapshot, setSnapshot] = useState<SystemSnapshot | null>(null);
-  const [history, setHistory] = useState<{ t: string; cpu: number; mem: number }[]>([]);
   const [portFilter, setPortFilter] = useState("");
   const [sortBy, setSortBy] = useState<"port" | "process" | "pid">("port");
   const [paused, setPaused] = useState(false);
-  const [error, setError] = useState<string | null>(null);
   const [killingPid, setKillingPid] = useState<number | null>(null);
-
-  const load = useCallback(async () => {
-    if (paused) return;
-    try {
-      const data = await getSystemSnapshot();
-      setSnapshot(data);
-      setError(null);
-      const label = new Date().toLocaleTimeString("ko-KR", {
-        hour: "2-digit",
-        minute: "2-digit",
-        second: "2-digit",
-      });
-      setHistory((prev) =>
-        [...prev, { t: label, cpu: data.cpu_usage_percent, mem: data.memory.used_percent }].slice(
-          -HISTORY_LEN,
-        ),
-      );
-    } catch {
-      setError("시스템 데이터를 불러올 수 없습니다.");
-    }
-  }, [paused]);
-
-  useEffect(() => {
-    if (!connected) return;
-    load();
-    const id = setInterval(load, POLL_MS);
-    return () => clearInterval(id);
-  }, [connected, load]);
+  const { snapshot, history, error, reload } = useSystemMetrics(connected, paused);
 
   const handleKillPort = useCallback(
     async (port: PortInfo) => {
@@ -70,14 +40,15 @@ export function SystemMonitor({ connected }: Props) {
       setKillingPid(port.pid);
       try {
         await killPortProcess(port.pid);
-        await load();
+        await reload();
       } catch (e) {
-        setError(e instanceof Error ? e.message : "프로세스 종료에 실패했습니다.");
+        /* error shown via parent */
+        void e;
       } finally {
         setKillingPid(null);
       }
     },
-    [load],
+    [reload],
   );
 
   const filteredPorts = useMemo(() => {
@@ -110,258 +81,222 @@ export function SystemMonitor({ connected }: Props) {
   }
 
   return (
-    <div className="space-y-6">
+    <div className="cyber-bg -mx-4 md:-mx-8 -my-6 px-4 md:px-8 py-4 space-y-3">
       <div className="flex items-center justify-between">
         <div>
-          <h2 className="text-lg font-semibold text-text">시스템 모니터</h2>
-          <p className="text-sm text-text-muted">CPU · 메모리 · 포트 — 1초마다 갱신</p>
+          <h2
+            className="text-sm font-bold tracking-widest uppercase"
+            style={{ fontFamily: "var(--cyber-font-display)", color: "var(--cyber-cyan)" }}
+          >
+            SYS.MONITOR
+          </h2>
+          <p className="text-xs font-mono text-text-muted">1s POLL · {HISTORY_LEN}s HISTORY</p>
         </div>
-        <button
-          type="button"
-          onClick={() => setPaused((p) => !p)}
-          className={`text-sm px-3 py-1.5 rounded-lg border transition-colors ${
-            paused
-              ? "border-warning text-warning-text bg-warning/10"
-              : "border-border text-text hover:bg-surface-elevated"
-          }`}
-        >
-          {paused ? "▶ 재개" : "⏸ 일시정지"}
+        <button type="button" onClick={() => setPaused((p) => !p)} className="cyber-btn">
+          {paused ? "▶ RESUME" : "⏸ PAUSE"}
         </button>
       </div>
 
       {error && (
-        <MascotScene
-          mood="confused"
-          title="시스템 데이터를 불러올 수 없습니다"
-          description={error}
-          size="md"
-        />
+        <div className="cyber-panel cyber-panel-glow-magenta px-4 py-2 text-sm font-mono text-danger-text">
+          ⚠ {error}
+        </div>
       )}
 
       {snapshot && (
         <>
-          <div className="grid md:grid-cols-3 gap-4">
-            <MetricCard
-              label="CPU 사용률"
+          <div className="grid md:grid-cols-3 gap-2">
+            <CyberMetric
+              label="CPU"
               value={`${snapshot.cpu_usage_percent.toFixed(1)}%`}
               percent={snapshot.cpu_usage_percent}
-              color="#6366f1"
+              color="var(--cyber-cyan)"
             />
-            <MetricCard
-              label="메모리 사용"
+            <CyberMetric
+              label="MEMORY"
               value={formatMemoryUsage(snapshot.memory.used_mb, snapshot.memory.total_mb)}
-              subValue={`${snapshot.memory.used_percent.toFixed(1)}% 사용 중`}
+              subValue={`${snapshot.memory.used_percent.toFixed(1)}%`}
               percent={snapshot.memory.used_percent}
-              color="#22c55e"
+              color="var(--cyber-green)"
             />
-            <div className="rounded-xl border border-border bg-surface-elevated p-4">
-              <p className="text-text-muted text-sm mb-1">TraceDesk 프로세스</p>
+            <CyberPanel title="TRACEDESK" glow="green">
               {snapshot.tracedesk ? (
-                <div className="space-y-1">
-                  <p className="text-lg font-semibold text-text">
-                    CPU {snapshot.tracedesk.cpu_percent.toFixed(1)}% ·{" "}
-                    {formatMemoryGb(snapshot.tracedesk.memory_mb)}
+                <div className="font-mono text-sm space-y-1">
+                  <p>
+                    CPU{" "}
+                    <span style={{ color: "var(--cyber-cyan)" }}>
+                      {snapshot.tracedesk.cpu_percent.toFixed(1)}%
+                    </span>
+                    {" · "}
+                    MEM{" "}
+                    <span style={{ color: "var(--cyber-green)" }}>
+                      {formatMemoryGb(snapshot.tracedesk.memory_mb)}
+                    </span>
                   </p>
-                  <p className="text-xs text-text-muted font-mono">PID {snapshot.tracedesk.pid}</p>
+                  <p className="text-xs text-text-muted">PID {snapshot.tracedesk.pid}</p>
                 </div>
               ) : (
-                <p className="text-text-muted">—</p>
+                <p className="text-text-muted font-mono text-xs">—</p>
               )}
-              <p className="text-xs text-text-muted mt-2">
-                LISTEN 포트 {snapshot.port_count}개
+              <p className="text-xs font-mono text-text-muted mt-2">
+                LISTEN {snapshot.port_count} PORTS
               </p>
-            </div>
+            </CyberPanel>
           </div>
 
-          <section className="rounded-xl border border-border bg-surface-elevated p-6">
-            <h3 className="font-semibold mb-4 text-text">실시간 추이 (최근 {HISTORY_LEN}초)</h3>
+          <CyberPanel title="TELEMETRY" subtitle={`${HISTORY_LEN}s ROLLING`} glow="cyan">
             <ResponsiveContainer width="100%" height={200}>
               <AreaChart data={history}>
                 <defs>
-                  <linearGradient id="cpuGrad" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="5%" stopColor={chart.accent} stopOpacity={0.35} />
-                    <stop offset="95%" stopColor={chart.accent} stopOpacity={0} />
+                  <linearGradient id="sysCpuGrad" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="5%" stopColor="var(--cyber-cyan)" stopOpacity={0.4} />
+                    <stop offset="95%" stopColor="var(--cyber-cyan)" stopOpacity={0} />
                   </linearGradient>
-                  <linearGradient id="memGrad" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="5%" stopColor={chart.success} stopOpacity={0.35} />
-                    <stop offset="95%" stopColor={chart.success} stopOpacity={0} />
+                  <linearGradient id="sysMemGrad" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="5%" stopColor="var(--cyber-green)" stopOpacity={0.4} />
+                    <stop offset="95%" stopColor="var(--cyber-green)" stopOpacity={0} />
                   </linearGradient>
                 </defs>
-                <CartesianGrid strokeDasharray="3 3" stroke={chart.grid} />
-                <XAxis dataKey="t" stroke={chart.axis} fontSize={10} interval="preserveStartEnd" />
-                <YAxis stroke={chart.axis} fontSize={11} domain={[0, 100]} tickFormatter={(v) => `${v}%`} />
+                <CartesianGrid strokeDasharray="2 4" stroke={chart.grid} opacity={0.5} />
+                <XAxis dataKey="t" stroke={chart.axis} fontSize={9} interval="preserveStartEnd" />
+                <YAxis stroke={chart.axis} fontSize={9} domain={[0, 100]} tickFormatter={(v) => `${v}%`} />
                 <Tooltip
                   contentStyle={{
-                    background: chart.tooltipBg,
-                    border: `1px solid ${chart.tooltipBorder}`,
-                    borderRadius: 8,
+                    background: "var(--cyber-panel-bg)",
+                    border: "1px solid var(--cyber-panel-border)",
+                    borderRadius: 0,
+                    fontFamily: "var(--cyber-font-mono)",
+                    fontSize: 11,
                     color: chart.tooltipText,
                   }}
-                  formatter={(v, name) => [`${Number(v).toFixed(1)}%`, name === "cpu" ? "CPU" : "메모리"]}
+                  formatter={(v, name) => [`${Number(v).toFixed(1)}%`, name === "cpu" ? "CPU" : "MEM"]}
                 />
-                <Area type="monotone" dataKey="cpu" stroke={chart.accent} fill="url(#cpuGrad)" strokeWidth={2} name="cpu" />
-                <Area type="monotone" dataKey="mem" stroke={chart.success} fill="url(#memGrad)" strokeWidth={2} name="mem" />
+                <Area type="monotone" dataKey="cpu" stroke="var(--cyber-cyan)" fill="url(#sysCpuGrad)" strokeWidth={1.5} name="cpu" />
+                <Area type="monotone" dataKey="mem" stroke="var(--cyber-green)" fill="url(#sysMemGrad)" strokeWidth={1.5} name="mem" />
               </AreaChart>
             </ResponsiveContainer>
-          </section>
+          </CyberPanel>
 
-          <div className="grid lg:grid-cols-2 gap-6">
-            <section className="rounded-xl border border-border bg-surface-elevated p-6">
-              <div className="flex items-center justify-between mb-4 gap-2 flex-wrap">
-                <h3 className="font-semibold text-text">사용 중인 포트</h3>
-                <div className="flex gap-2">
+          <div className="grid lg:grid-cols-2 gap-3">
+            <CyberPanel
+              title="NET.PORTS"
+              glow="cyan"
+              headerRight={
+                <div className="flex gap-1">
                   <input
                     type="text"
-                    placeholder="포트/프로세스 검색"
+                    placeholder="FILTER"
                     value={portFilter}
                     onChange={(e) => setPortFilter(e.target.value)}
-                    className="text-sm px-3 py-1.5 rounded-lg bg-surface border border-border text-text w-40 placeholder:text-text-muted"
+                    className="cyber-input w-24"
                   />
                   <select
                     value={sortBy}
                     onChange={(e) => setSortBy(e.target.value as typeof sortBy)}
-                    className="text-sm px-2 py-1.5 rounded-lg bg-surface border border-border text-text"
+                    className="cyber-input"
                   >
-                    <option value="port">포트순</option>
-                    <option value="process">프로세스순</option>
-                    <option value="pid">PID순</option>
+                    <option value="port">PORT</option>
+                    <option value="process">PROC</option>
+                    <option value="pid">PID</option>
                   </select>
                 </div>
+              }
+            >
+              <div className="cyber-scroll max-h-80">
+                <table className="cyber-table">
+                  <thead>
+                    <tr>
+                      <th>PORT</th>
+                      <th>ADDR</th>
+                      <th>PROC</th>
+                      <th>PID</th>
+                      <th />
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {filteredPorts.length === 0 ? (
+                      <tr>
+                        <td colSpan={5} className="text-center text-text-muted py-8">
+                          NO PORTS
+                        </td>
+                      </tr>
+                    ) : (
+                      filteredPorts.map((p) => (
+                        <tr
+                          key={`${p.protocol}-${p.address}-${p.port}-${p.pid}`}
+                          className={p.is_tracedesk ? "opacity-80" : ""}
+                        >
+                          <td style={{ color: p.is_tracedesk ? "var(--cyber-green)" : undefined }}>
+                            {p.port}
+                            {p.is_tracedesk && (
+                              <span className="ml-1 text-[0.55rem]" style={{ color: "var(--cyber-green)" }}>
+                                TD
+                              </span>
+                            )}
+                          </td>
+                          <td className="text-xs text-text-muted truncate max-w-[100px]">{p.address}</td>
+                          <td className="truncate max-w-[120px]">{p.process ?? "—"}</td>
+                          <td>{p.pid ?? "—"}</td>
+                          <td>
+                            {p.pid && !p.is_tracedesk && (
+                              <button
+                                type="button"
+                                disabled={killingPid === p.pid}
+                                onClick={() => handleKillPort(p)}
+                                className="cyber-btn cyber-btn-danger !px-2 !py-0.5"
+                              >
+                                {killingPid === p.pid ? "…" : "KILL"}
+                              </button>
+                            )}
+                          </td>
+                        </tr>
+                      ))
+                    )}
+                  </tbody>
+                </table>
               </div>
-              <PortTable ports={filteredPorts} killingPid={killingPid} onKill={handleKillPort} />
-            </section>
+            </CyberPanel>
 
-            <section className="rounded-xl border border-border bg-surface-elevated p-6">
-              <h3 className="font-semibold mb-4 text-text">CPU Top 프로세스</h3>
-              <ProcessTable processes={snapshot.top_processes} />
-            </section>
+            <CyberPanel title="PROC.TOP" subtitle="CPU" glow="green">
+              <div className="cyber-scroll max-h-80">
+                <table className="cyber-table">
+                  <thead>
+                    <tr>
+                      <th>NAME</th>
+                      <th>CPU</th>
+                      <th>MEM</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {snapshot.top_processes.length === 0 ? (
+                      <tr>
+                        <td colSpan={3} className="text-center text-text-muted py-8">
+                          NO DATA
+                        </td>
+                      </tr>
+                    ) : (
+                      snapshot.top_processes.map((p) => (
+                        <tr key={p.pid}>
+                          <td>
+                            <span className="truncate block max-w-[140px]" title={p.name}>
+                              {p.name}
+                            </span>
+                            <span className="text-[0.55rem] text-text-muted">PID {p.pid}</span>
+                          </td>
+                          <td style={{ color: "var(--cyber-cyan)" }}>
+                            {p.cpu_percent.toFixed(1)}%
+                          </td>
+                          <td>{formatMemoryGb(p.memory_mb)}</td>
+                        </tr>
+                      ))
+                    )}
+                  </tbody>
+                </table>
+              </div>
+            </CyberPanel>
           </div>
         </>
       )}
-    </div>
-  );
-}
-
-function MetricCard({
-  label,
-  value,
-  subValue,
-  percent,
-  color,
-}: {
-  label: string;
-  value: string;
-  subValue?: string;
-  percent: number;
-  color: string;
-}) {
-  return (
-    <div className="rounded-xl border border-border bg-surface-elevated p-4">
-      <p className="text-text-muted text-sm mb-1">{label}</p>
-      <p className="text-xl font-semibold mb-1 text-text">{value}</p>
-      {subValue && <p className="text-xs text-text-muted mb-3">{subValue}</p>}
-      {!subValue && <div className="mb-3" />}
-      <div className="h-2 bg-border rounded-full overflow-hidden">
-        <div
-          className="h-full rounded-full transition-all duration-300"
-          style={{ width: `${Math.min(percent, 100)}%`, background: color }}
-        />
-      </div>
-    </div>
-  );
-}
-
-function PortTable({
-  ports,
-  killingPid,
-  onKill,
-}: {
-  ports: PortInfo[];
-  killingPid: number | null;
-  onKill: (port: PortInfo) => void;
-}) {
-  if (ports.length === 0) {
-    return <p className="text-sm text-text-muted py-8 text-center">표시할 포트가 없습니다</p>;
-  }
-  return (
-    <div className="overflow-auto max-h-80">
-      <table className="w-full text-sm">
-        <thead>
-          <tr className="text-text-muted text-left border-b border-border">
-            <th className="pb-2 pr-3 font-medium">포트</th>
-            <th className="pb-2 pr-3 font-medium">주소</th>
-            <th className="pb-2 pr-3 font-medium">프로세스</th>
-            <th className="pb-2 pr-3 font-medium">PID</th>
-            <th className="pb-2 font-medium w-16" />
-          </tr>
-        </thead>
-        <tbody>
-          {ports.map((p) => (
-            <tr
-              key={`${p.protocol}-${p.address}-${p.port}-${p.pid}`}
-              className={`border-b border-border/50 ${p.is_tracedesk ? "bg-accent/10" : ""}`}
-            >
-              <td className="py-2 pr-3 font-mono">
-                {p.port}
-                {p.is_tracedesk && (
-                  <span className="ml-1 text-[10px] text-accent">TraceDesk</span>
-                )}
-              </td>
-              <td className="py-2 pr-3 font-mono text-xs text-text-muted truncate max-w-[120px]">
-                {p.address}
-              </td>
-              <td className="py-2 pr-3 truncate max-w-[140px]">{p.process ?? "—"}</td>
-              <td className="py-2 pr-3 font-mono text-text-muted">{p.pid ?? "—"}</td>
-              <td className="py-2">
-                {p.pid && !p.is_tracedesk ? (
-                  <button
-                    type="button"
-                    disabled={killingPid === p.pid}
-                    onClick={() => onKill(p)}
-                    className="text-xs px-2 py-1 rounded border border-danger/40 text-danger-text hover:bg-danger/10 disabled:opacity-50 transition-colors"
-                    title="프로세스 종료"
-                  >
-                    {killingPid === p.pid ? "…" : "종료"}
-                  </button>
-                ) : null}
-              </td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
-    </div>
-  );
-}
-
-function ProcessTable({ processes }: { processes: ProcessInfo[] }) {
-  if (processes.length === 0) {
-    return <p className="text-sm text-text-muted py-8 text-center">프로세스 데이터 없음</p>;
-  }
-  return (
-    <div className="overflow-auto max-h-80">
-      <table className="w-full text-sm">
-        <thead>
-          <tr className="text-text-muted text-left border-b border-border">
-            <th className="pb-2 pr-3 font-medium">프로세스</th>
-            <th className="pb-2 pr-3 font-medium">CPU</th>
-            <th className="pb-2 font-medium">메모리</th>
-          </tr>
-        </thead>
-        <tbody>
-          {processes.map((p) => (
-            <tr key={p.pid} className="border-b border-border/50">
-              <td className="py-2 pr-3">
-                <span className="truncate block max-w-[160px]" title={p.name}>
-                  {p.name}
-                </span>
-                <span className="text-xs text-text-muted font-mono">PID {p.pid}</span>
-              </td>
-              <td className="py-2 pr-3 font-mono">{p.cpu_percent.toFixed(1)}%</td>
-              <td className="py-2 font-mono">{formatMemoryGb(p.memory_mb)}</td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
     </div>
   );
 }

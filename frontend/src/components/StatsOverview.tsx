@@ -1,5 +1,6 @@
 import { formatDuration } from "../api/client";
 import type { DailyStatistics } from "../api/client";
+import { CYBER } from "../theme/cyberTokens";
 
 interface Props {
   stats: DailyStatistics;
@@ -15,9 +16,9 @@ function StatCard({
   accent?: string;
 }) {
   return (
-    <div className="rounded-xl border border-border bg-surface-elevated p-4">
-      <p className="text-text-muted text-sm mb-1">{label}</p>
-      <p className="text-2xl font-semibold" style={{ color: accent ?? "inherit" }}>
+    <div className="td-panel p-4">
+      <p className="td-label mb-1">{label}</p>
+      <p className="text-2xl font-data font-semibold" style={{ color: accent ?? "inherit" }}>
         {value}
       </p>
     </div>
@@ -30,15 +31,15 @@ export function StatsOverview({ stats }: Props) {
       <StatCard
         label="활동 시간"
         value={formatDuration(stats.active)}
-        accent="#6366f1"
+        accent={CYBER.cyan}
       />
       <StatCard
         label="유휴 시간"
         value={formatDuration(stats.idle)}
-        accent="#94a3b8"
+        accent={CYBER.muted}
       />
-      <StatCard label="복사" value={`${stats.copy}회`} accent="#22c55e" />
-      <StatCard label="붙여넣기" value={`${stats.paste}회`} accent="#f59e0b" />
+      <StatCard label="복사" value={`${stats.copy}회`} accent={CYBER.green} />
+      <StatCard label="붙여넣기" value={`${stats.paste}회`} accent={CYBER.amber} />
     </div>
   );
 }

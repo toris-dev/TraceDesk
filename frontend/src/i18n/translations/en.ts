@@ -42,6 +42,8 @@ export const en = {
     error: "Update check failed: {{message}}",
   },
   nav: {
+    monitor: "Command center",
+    monitorDesc: "Activity · system · live unified",
     journal: "Activity journal",
     journalDesc: "Browse · filter · details",
     overview: "Overview",
@@ -103,6 +105,7 @@ export const en = {
     noRecordDesc: "Activity is recorded while TraceDesk is running. Check input monitoring in Settings.",
     goToday: "Go to today",
     loadingAnalytics: "Loading analytics",
+    loadingMonitor: "Initializing command center",
     loadingSystem: "System monitor",
     exportSaved: "{{name}} · {{count}} rows saved",
     timelineTitle: "Timeline",

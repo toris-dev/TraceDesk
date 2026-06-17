@@ -1,4 +1,5 @@
 import type { ActivityItem } from "../api/client";
+import { CYBER, EVENT_ACCENT } from "../theme/cyberTokens";
 
 export type FeedFilter = "all" | "app" | "action" | "idle";
 
@@ -58,21 +59,7 @@ export function filterByHour(events: ActivityItem[], hour: number | null): Activ
 }
 
 export function eventAccent(type: string): string {
-  switch (type) {
-    case "COPY":
-      return "#22c55e";
-    case "PASTE":
-      return "#f59e0b";
-    case "SCREENSHOT":
-      return "#ef4444";
-    case "WINDOW_FOCUS":
-      return "#6366f1";
-    case "IDLE_START":
-    case "IDLE_END":
-      return "#94a3b8";
-    default:
-      return "#818cf8";
-  }
+  return EVENT_ACCENT[type] ?? CYBER.cyan;
 }
 
 export function eventIcon(type: string): string {

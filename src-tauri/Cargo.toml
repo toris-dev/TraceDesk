@@ -1,6 +1,6 @@
 [package]
 name = "tracedesk"
-version = "0.1.3"
+version = "0.1.4"
 description = "Personal Computer Activity Intelligence System"
 authors = ["TraceDesk"]
 edition = "2021"
@@ -17,7 +17,7 @@ path = "src/main.rs"
 tauri-build = { version = "2", features = [] }
 
 [dependencies]
-tauri = { version = "2", features = ["tray-icon", "protocol-asset"] }
+tauri = { version = "2", features = ["tray-icon", "protocol-asset", "image-png"] }
 tauri-plugin-shell = "2"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"

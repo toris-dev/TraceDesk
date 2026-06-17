@@ -53,11 +53,23 @@ jobs:
           tagName: ${{ github.ref_name }}
           releaseName: TraceDesk ${{ github.ref_name }}
           releaseBody: |
-            ## 설치
+            ## v0.1.4
+
+            ### UI/UX
+            - 사이버네틱 HUD 스타일 전역 적용 (시안 네온 팔레트, Orbitron/Exo 2/JetBrains Mono)
+            - 통합 모니터링 커맨드 센터 탭 추가
+            - 거북이 마스코트·트레이 아이콘 갱신
+
+            ### 성능
+            - 시스템 메트릭 캐시·폴링 최적화 (CPU/메모리/포트)
+            - 프론트엔드 폴링 간격·visibility pause·이벤트 버퍼 상한
+            - 액티비티 번들·스크린샷 큐 경량화
+
+            ### 설치
             - macOS (Apple Silicon): `TraceDesk_*_aarch64.dmg` — Applications로 드래그
             - Windows (x64): `TraceDesk_*_x64-setup.exe` — 설치 마법사 실행
 
-            ## 자동 업데이트
+            ### 자동 업데이트
             앱 내 **설정 → 앱 업데이트** 또는 메뉴 **업데이트 확인**으로 새 버전을 받을 수 있습니다.
           releaseDraft: false
           prerelease: false

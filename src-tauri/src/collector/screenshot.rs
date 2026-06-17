@@ -157,7 +157,7 @@ pub fn spawn_screenshot_watcher(
                             tracing::debug!(path = %path.display(), "screenshot file during keyboard debounce");
                         }
 
-                        let _ = tx.send(path);
+                        let _ = tx.try_send(path);
                     }
                 }
             })

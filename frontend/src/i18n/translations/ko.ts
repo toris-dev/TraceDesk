@@ -56,6 +56,8 @@ export const ko = {
     error: "업데이트 확인 실패: {{message}}",
   },
   nav: {
+    monitor: "커맨드 센터",
+    monitorDesc: "활동 · 시스템 · 실시간 통합",
     journal: "활동 일지",
     journalDesc: "탐색 · 필터 · 상세 보기",
     overview: "요약",
@@ -117,6 +119,7 @@ export const ko = {
     noRecordDesc: "TraceDesk가 실행 중일 때 활동이 기록됩니다. 설정에서 입력 모니터링을 확인하세요.",
     goToday: "오늘로 이동",
     loadingAnalytics: "분석 화면 불러오는 중",
+    loadingMonitor: "커맨드 센터 초기화 중",
     loadingSystem: "시스템 모니터",
     exportSaved: "{{name}} · {{count}}건 저장됨",
     timelineTitle: "타임라인",

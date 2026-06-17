@@ -50,7 +50,7 @@ export function ActivityFeed({
   const selected = filtered.find((e) => e.id === selectedId) ?? null;
 
   return (
-    <section className="rounded-2xl border border-border bg-surface-elevated overflow-hidden flex flex-col min-h-[420px]">
+    <section className="td-panel overflow-hidden flex flex-col min-h-[420px]">
       <div className="p-5 border-b border-border space-y-4">
         <div className="flex flex-wrap items-start justify-between gap-3">
           <div>

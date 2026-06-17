@@ -1,11 +1,23 @@
 use crate::menu::{tray_labels, MENU_QUIT, MENU_SHOW};
 use tauri::{
+    include_image,
     menu::{Menu, MenuItem},
     tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent},
     AppHandle,
 };
 
 pub use crate::menu::{hide_main_window, show_main_window};
+
+fn tray_icon() -> tauri::image::Image<'static> {
+    #[cfg(target_os = "macos")]
+    {
+        include_image!("icons/tray-icon.png")
+    }
+    #[cfg(not(target_os = "macos"))]
+    {
+        include_image!("icons/32x32.png")
+    }
+}
 
 pub fn setup(app: &AppHandle, locale: &str) -> tauri::Result<()> {
     let (show_label, quit_label, tooltip) = tray_labels(locale);
@@ -19,9 +31,7 @@ pub fn setup(app: &AppHandle, locale: &str) -> tauri::Result<()> {
         .tooltip(tooltip)
         .show_menu_on_left_click(false);
 
-    if let Some(icon) = app.default_window_icon() {
-        builder = builder.icon(icon.clone());
-    }
+    builder = builder.icon(tray_icon());
 
     #[cfg(target_os = "macos")]
     {

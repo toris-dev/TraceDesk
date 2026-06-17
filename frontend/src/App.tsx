@@ -1,8 +1,9 @@
-import { lazy, Suspense, useCallback, useEffect, useMemo, useState } from "react";
+import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   getActivityBundle,
   getAvailableDates,
   getSettings,
+  getWeeklyReport,
   subscribeActivityEvents,
   subscribeMenuEvents,
   upsertActivityEvent,
@@ -30,25 +31,33 @@ import { SetupWizard } from "./components/SetupWizard";
 import { ThemeToggle } from "./components/ThemeToggle";
 import {
   DashboardLayout,
+  activityRefreshInterval,
   isActivityPage,
   isDashboardPage,
   type DashboardPage,
 } from "./layout/DashboardLayout";
-import { OverviewView } from "./views/OverviewView";
 import { ActivityJournalView } from "./views/ActivityJournalView";
 import { I18nProvider, normalizeLocale, useI18n, type Locale } from "./i18n";
 import { ThemeProvider, normalizeTheme, type Theme } from "./theme";
 import { formatDate, isToday, todayISO } from "./utils/date";
 import { filterJournalEvents, isJournalEvent } from "./utils/activityFeed";
 
+const OverviewView = lazy(() =>
+  import("./views/OverviewView").then((m) => ({ default: m.OverviewView })),
+);
 const AnalyticsView = lazy(() =>
   import("./views/AnalyticsView").then((m) => ({ default: m.AnalyticsView })),
+);
+const CyberCommandCenter = lazy(() =>
+  import("./components/cyber/CyberCommandCenter").then((m) => ({ default: m.CyberCommandCenter })),
 );
 const SystemMonitor = lazy(() =>
   import("./components/SystemMonitor").then((m) => ({ default: m.SystemMonitor })),
 );
 
-const REFRESH_INTERVAL = 60_000;
+const MAX_JOURNAL_EVENTS = 300;
+const MAX_ACTION_EVENTS = 40;
+const MAX_LIVE_JOURNAL_EVENTS = 120;
 
 function initialLocale(): Locale {
   if (typeof navigator !== "undefined" && navigator.language.toLowerCase().startsWith("ko")) {
@@ -113,7 +122,7 @@ function AppContent({
   onSettingsChange: (settings: AppSettings) => void;
 }) {
   const { locale, t } = useI18n();
-  const [page, setPage] = useState<DashboardPage>("journal");
+  const [page, setPage] = useState<DashboardPage>("monitor");
   const [selectedDate, setSelectedDate] = useState(todayISO);
   const [availableDates, setAvailableDates] = useState<string[]>([]);
   const [stats, setStats] = useState<DailyStatistics | null>(null);
@@ -132,6 +141,7 @@ function AppContent({
   const [connected, setConnected] = useState(true);
   const [timelineMode, setTimelineMode] = useState<"gantt" | "list">("gantt");
   const [exportNotice, setExportNotice] = useState<string | null>(null);
+  const loadInflight = useRef(false);
 
   const loadAvailableDates = useCallback(async () => {
     try {
@@ -144,6 +154,8 @@ function AppContent({
 
   const loadData = useCallback(
     async (date: string, silent = false) => {
+      if (loadInflight.current) return;
+      loadInflight.current = true;
       if (!silent) setLoading(true);
       try {
         const bundle = await getActivityBundle(date);
@@ -157,23 +169,32 @@ function AppContent({
         setActionEvents(
           bundle.events
             .filter((e) => isActionEvent(e.type))
-            .slice(-50)
+            .slice(-MAX_ACTION_EVENTS)
             .reverse(),
         );
-        setActivityEvents(filterJournalEvents(bundle.events));
+        setActivityEvents(filterJournalEvents(bundle.events).slice(-MAX_JOURNAL_EVENTS));
         setProductivity(bundle.productivity);
-        setWeeklyReport(bundle.weekly);
         setConnected(true);
         setError(null);
       } catch (e) {
         setConnected(false);
         setError(typeof e === "string" ? e : t("app.loadErrorDefault"));
       } finally {
+        loadInflight.current = false;
         if (!silent) setLoading(false);
       }
     },
     [t],
   );
+
+  const loadWeeklyReport = useCallback(async (date: string) => {
+    try {
+      const report = await getWeeklyReport(date);
+      setWeeklyReport(report);
+    } catch {
+      setWeeklyReport(null);
+    }
+  }, []);
 
   const handleExportDone = useCallback(
     (result: ExportResult) => {
@@ -223,12 +244,23 @@ function AppContent({
 
   useEffect(() => {
     if (!isActivityPage(page) || !isToday(selectedDate)) return;
+    const intervalMs = activityRefreshInterval(page);
     const id = setInterval(() => {
       loadData(selectedDate, true);
-      loadAvailableDates();
-    }, REFRESH_INTERVAL);
+      if (page !== "monitor") {
+        loadAvailableDates();
+      }
+    }, intervalMs);
     return () => clearInterval(id);
   }, [selectedDate, page, loadData, loadAvailableDates]);
+
+  useEffect(() => {
+    if (page !== "analytics") {
+      setWeeklyReport(null);
+      return;
+    }
+    loadWeeklyReport(selectedDate);
+  }, [page, selectedDate, loadWeeklyReport]);
 
   useEffect(() => {
     if (!isActivityPage(page) || !isToday(selectedDate)) return;
@@ -239,7 +271,7 @@ function AppContent({
       if (isJournalEvent(item.type)) {
         setActivityEvents((prev) => {
           const result = upsertActivityEvent(prev, item);
-          return result.events.slice(0, 200);
+          return result.events.slice(0, MAX_LIVE_JOURNAL_EVENTS);
         });
       }
       if (!isActionEvent(item.type)) return;
@@ -247,7 +279,7 @@ function AppContent({
       setActionEvents((prev) => {
         const result = upsertActivityEvent(prev, item);
         isNew = result.isNew;
-        return result.events.slice(0, 50);
+        return result.events.slice(0, MAX_ACTION_EVENTS);
       });
       if (!isNew) return;
       setStats((prev) => {
@@ -295,7 +327,11 @@ function AppContent({
   );
 
   const mascotTab =
-    page === "system" ? "system" : page === "settings" ? "settings" : "activity";
+    page === "monitor" || page === "system"
+      ? "system"
+      : page === "settings"
+        ? "settings"
+        : "activity";
 
   const activityToolbar = isActivityPage(page) ? (
     <ActivityToolbar
@@ -335,7 +371,7 @@ function AppContent({
     if (!hasActivity && page === "overview") {
       return (
         <div className="space-y-6 max-w-[1400px]">
-          <div className="rounded-2xl border border-border bg-surface-elevated overflow-hidden">
+          <div className="td-panel overflow-hidden">
             <MascotScene
               mood="sleeping"
               title={t("app.noRecordTitle", {
@@ -365,6 +401,27 @@ function AppContent({
     }
 
     switch (page) {
+      case "monitor":
+        return (
+          <Suspense
+            fallback={
+              <MascotScene mood="loading" title={t("app.loadingMonitor")} size="md" />
+            }
+          >
+            <CyberCommandCenter
+              connected={connected && !error}
+              stats={stats}
+              productivity={productivity}
+              actionHourly={actionHourly}
+              hourly={hourly}
+              fullTimeline={fullTimeline}
+              activityEvents={activityEvents}
+              dateLabel={dateLabel}
+              viewingToday={viewingToday}
+            />
+          </Suspense>
+        );
+
       case "journal":
         return (
           <ActivityJournalView
@@ -380,17 +437,19 @@ function AppContent({
 
       case "overview":
         return (
-          <OverviewView
-            stats={stats}
-            productivity={productivity}
-            actionEvents={actionEvents}
-            actionHourly={actionHourly}
-            hourly={hourly}
-            fullTimeline={fullTimeline}
-            viewingToday={viewingToday}
-            dateLabel={dateLabel}
-            onNavigate={setPage}
-          />
+          <Suspense fallback={<MascotScene mood="loading" title={t("app.loadingActivity")} size="md" />}>
+            <OverviewView
+              stats={stats}
+              productivity={productivity}
+              actionEvents={actionEvents}
+              actionHourly={actionHourly}
+              hourly={hourly}
+              fullTimeline={fullTimeline}
+              viewingToday={viewingToday}
+              dateLabel={dateLabel}
+              onNavigate={setPage}
+            />
+          </Suspense>
         );
 
       case "actions":
@@ -406,7 +465,7 @@ function AppContent({
 
       case "timeline":
         return (
-          <section className="rounded-2xl border border-border bg-surface-elevated p-6 max-w-[1400px]">
+          <section className="td-panel p-6 max-w-[1400px]">
             <div className="flex flex-wrap items-center justify-between gap-3 mb-6">
               <div>
                 <h3 className="text-lg font-semibold">{t("app.timelineTitle")}</h3>
