@@ -7,6 +7,7 @@ mod commands;
 mod database;
 mod events;
 mod export;
+mod llm;
 mod menu;
 mod os;
 mod settings;
@@ -153,6 +154,14 @@ pub fn run() {
             settings_commands::run_archive_now,
             export::export_activity,
             commands::get_activity_bundle,
+            commands::get_action_events,
+            llm::commands::get_llm_config,
+            llm::commands::update_llm_settings,
+            llm::commands::set_llm_api_key,
+            llm::commands::llm_list_models,
+            llm::commands::llm_test_connection,
+            llm::commands::llm_ask_actions,
+            llm::commands::llm_chat,
         ])
         .build(tauri::generate_context!())
         .expect("failed to build TraceDesk application")

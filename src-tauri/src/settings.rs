@@ -40,6 +40,37 @@ pub struct AppSettings {
     pub setup_completed: bool,
     #[serde(default)]
     pub first_run_completed: bool,
+    /// `ollama` | `openai` (OpenAI-compatible API)
+    #[serde(default = "default_llm_provider")]
+    pub llm_provider: String,
+    #[serde(default)]
+    pub llm_model: String,
+    #[serde(default = "default_ollama_url")]
+    pub ollama_base_url: String,
+    #[serde(default = "default_api_base_url")]
+    pub api_base_url: String,
+    /// 마지막 연결 테스트 성공 여부
+    #[serde(default)]
+    pub llm_connected: bool,
+}
+
+fn default_llm_provider() -> String {
+    "ollama".into()
+}
+
+fn default_ollama_url() -> String {
+    "http://127.0.0.1:11434".into()
+}
+
+fn default_api_base_url() -> String {
+    "https://api.openai.com/v1".into()
+}
+
+pub fn normalize_llm_provider(value: &str) -> String {
+    match value {
+        "openai" | "api" => "openai".into(),
+        _ => "ollama".into(),
+    }
 }
 
 fn default_locale() -> String {
@@ -80,6 +111,11 @@ impl Default for AppSettings {
             theme: default_theme(),
             setup_completed: false,
             first_run_completed: false,
+            llm_provider: default_llm_provider(),
+            llm_model: String::new(),
+            ollama_base_url: default_ollama_url(),
+            api_base_url: default_api_base_url(),
+            llm_connected: false,
         }
     }
 }

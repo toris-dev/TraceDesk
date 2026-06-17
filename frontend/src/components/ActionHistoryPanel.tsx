@@ -1,3 +1,4 @@
+import { useMemo, useState } from "react";
 import {
   screenshotThumbnailSrc,
   type ActivityItem,
@@ -5,6 +6,8 @@ import {
 import { CopyableClipboardContent } from "./CopyableClipboardContent";
 import { useI18n } from "../i18n";
 import { isActionEvent } from "../utils/activityFeed";
+import type { ActionFilter } from "../utils/actionAnalytics";
+import { filterActionEvents } from "../utils/actionAnalytics";
 
 export { isActionEvent };
 
@@ -14,20 +17,29 @@ interface Props {
   dateLabel: string;
 }
 
+const FILTERS: { id: ActionFilter; labelKey: string }[] = [
+  { id: "all", labelKey: "filterAll" },
+  { id: "COPY", labelKey: "copy" },
+  { id: "PASTE", labelKey: "paste" },
+  { id: "SCREENSHOT", labelKey: "capture" },
+];
+
 export function ActionHistoryPanel({ events, viewingToday, dateLabel }: Props) {
   const { t } = useI18n();
+  const [filter, setFilter] = useState<ActionFilter>("all");
+  const filtered = useMemo(() => filterActionEvents(events, filter), [events, filter]);
+
   const copyCount = events.filter((e) => e.type === "COPY").length;
   const pasteCount = events.filter((e) => e.type === "PASTE").length;
   const shotCount = events.filter((e) => e.type === "SCREENSHOT").length;
 
   return (
-    <section
-      id="action-history"
-      className="rounded-xl border border-border bg-surface-elevated p-6"
-    >
+    <section id="action-history" className="td-panel p-6">
       <div className="flex flex-wrap items-start justify-between gap-3 mb-4">
         <div>
-          <h2 className="text-lg font-semibold text-text">{t("actions.title")}</h2>
+          <h2 className="font-display font-semibold tracking-wide text-[var(--cyber-cyan)]">
+            {t("actions.eventLog")}
+          </h2>
           <p className="text-sm text-text-muted mt-1">
             {t("actions.dateRecorded", { date: dateLabel })}
             {viewingToday && (
@@ -38,20 +50,37 @@ export function ActionHistoryPanel({ events, viewingToday, dateLabel }: Props) {
             )}
           </p>
         </div>
-        <div className="flex gap-3 text-sm text-text">
+        <div className="flex gap-3 text-sm font-data">
           <span>
-            {t("actions.copy")} <strong className="text-success-text">{copyCount}</strong>
+            {t("actions.copy")} <strong className="text-[var(--cyber-green)]">{copyCount}</strong>
           </span>
           <span>
-            {t("actions.paste")} <strong className="text-warning">{pasteCount}</strong>
+            {t("actions.paste")} <strong className="text-[var(--cyber-amber)]">{pasteCount}</strong>
           </span>
           <span>
-            {t("actions.capture")} <strong className="text-danger-text">{shotCount}</strong>
+            {t("actions.capture")} <strong className="text-[var(--cyber-magenta)]">{shotCount}</strong>
           </span>
         </div>
       </div>
 
-      {events.length === 0 ? (
+      <div className="flex flex-wrap gap-1 mb-4">
+        {FILTERS.map((f) => (
+          <button
+            key={f.id}
+            type="button"
+            onClick={() => setFilter(f.id)}
+            className={`rounded-full px-3 py-1.5 text-xs font-display tracking-wide border transition-colors ${
+              filter === f.id
+                ? "bg-[var(--cyber-cyan-dim)] border-[var(--cyber-cyan)] text-[var(--cyber-cyan)]"
+                : "border-border text-text-muted hover:border-[var(--cyber-cyan)]"
+            }`}
+          >
+            {t(`actions.${f.labelKey}`)}
+          </button>
+        ))}
+      </div>
+
+      {filtered.length === 0 ? (
         <div className="rounded-lg border border-dashed border-border bg-surface/50 px-4 py-8 text-center">
           <p className="text-text-muted text-sm">{t("actions.empty")}</p>
           <p className="text-text-muted text-xs mt-2">
@@ -62,8 +91,8 @@ export function ActionHistoryPanel({ events, viewingToday, dateLabel }: Props) {
           </p>
         </div>
       ) : (
-        <div className="space-y-2 max-h-[28rem] overflow-y-auto pr-1">
-          {events.map((ev, i) => (
+        <div className="space-y-2 max-h-[32rem] overflow-y-auto pr-1 cyber-scroll">
+          {filtered.map((ev, i) => (
             <ActionEventRow key={ev.id ?? `${ev.type}-${ev.time}-${i}`} event={ev} />
           ))}
         </div>

@@ -324,7 +324,7 @@ export function CyberCommandCenter({
           </div>
           <div className="xl:col-span-6">
             <CyberPanel title="ACTION.SIGNAL" subtitle="HOURLY" glow="magenta" className="h-[220px]">
-              <ActionChart data={actionHourly} />
+              <ActionChart data={actionHourly} variant="grouped" height={180} />
             </CyberPanel>
           </div>
 

@@ -9,6 +9,7 @@ import {
 } from "../api/client";
 import { MascotScene } from "./mascot";
 import { UpdatePanel } from "./UpdatePanel";
+import { LlmSettingsSection } from "./llm/LlmSettingsSection";
 import { LOCALES, useI18n, usePlatformStrings } from "../i18n";
 import { THEMES, useTheme, type Theme } from "../theme";
 import { isMacPlatform, type AppPlatform } from "../utils/platform";
@@ -210,6 +211,8 @@ export function SettingsPanel({ onSettingsChange }: Props) {
           })}
         </div>
       </section>
+
+      <LlmSettingsSection />
 
       <UpdatePanel />
 

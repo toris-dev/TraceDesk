@@ -1,6 +1,6 @@
 import { useMemo } from "react";
 import type { MascotMood } from "./mascot";
-import { MascotCompanion, pickMessage, scoreToMood } from "./mascot";
+import { MascotChatDock, pickMessage, scoreToMood } from "./mascot";
 
 interface Props {
   loading: boolean;
@@ -10,6 +10,8 @@ interface Props {
   productivityScore?: number;
   activeTab: "activity" | "system" | "settings";
   setupCompleted: boolean;
+  selectedDate: string;
+  onOpenSettings: () => void;
 }
 
 export function MascotAssistant({
@@ -20,6 +22,8 @@ export function MascotAssistant({
   productivityScore,
   activeTab,
   setupCompleted,
+  selectedDate,
+  onOpenSettings,
 }: Props) {
   const { mood, message } = useMemo(() => {
     if (!setupCompleted) {
@@ -49,5 +53,12 @@ export function MascotAssistant({
 
   if (!setupCompleted) return null;
 
-  return <MascotCompanion mood={mood} message={message} />;
+  return (
+    <MascotChatDock
+      mood={mood}
+      greeting={message}
+      selectedDate={selectedDate}
+      onOpenSettings={onOpenSettings}
+    />
+  );
 }

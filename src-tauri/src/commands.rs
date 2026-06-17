@@ -6,6 +6,7 @@ use crate::analytics::{
     DailyStatistics, FullTimelineItem, IdleAnalysis, ProductivityAnalysis, WeeklyReport,
 };
 use crate::database::models::ApplicationUsage;
+use crate::events::EventType;
 use crate::os::{self, PermissionStatus};
 use crate::settings_commands::{filter_permissions_by_settings, SettingsState};
 use crate::state::AppState;
@@ -53,6 +54,51 @@ pub fn get_activity_today(
             metadata: e.metadata,
         })
         .collect())
+}
+
+const MAX_ACTION_EVENTS_DETAIL: usize = 500;
+
+/// Copy / paste / screenshot with full metadata (clipboard preview kept) for graph & search.
+#[tauri::command]
+pub fn get_action_events(
+    state: State<AppState>,
+    date: Option<String>,
+) -> Result<Vec<ActivityItem>, String> {
+    let date = parse_date(date)?;
+    let events = state
+        .repository
+        .get_events_for_date(date)
+        .map_err(|e| e.to_string())?;
+
+    let mut items: Vec<ActivityItem> = events
+        .into_iter()
+        .filter(|e| {
+            matches!(
+                e.event_type,
+                EventType::Copy | EventType::Paste | EventType::Screenshot
+            )
+        })
+        .map(|e| ActivityItem {
+            id: e.id,
+            event_type: e.event_type.as_str().to_string(),
+            time: e
+                .created_at
+                .with_timezone(&Local)
+                .format("%H:%M:%S")
+                .to_string(),
+            name: e.application,
+            window_title: e.window_title,
+            duration: e.duration,
+            metadata: e.metadata,
+        })
+        .collect();
+
+    if items.len() > MAX_ACTION_EVENTS_DETAIL {
+        let skip = items.len() - MAX_ACTION_EVENTS_DETAIL;
+        items = items.split_off(skip);
+    }
+
+    Ok(items)
 }
 
 #[tauri::command]

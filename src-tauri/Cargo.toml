@@ -1,6 +1,6 @@
 [package]
 name = "tracedesk"
-version = "0.1.4"
+version = "0.1.5"
 description = "Personal Computer Activity Intelligence System"
 authors = ["TraceDesk"]
 edition = "2021"
@@ -35,6 +35,7 @@ arboard = "3"
 notify = "7"
 crossbeam-channel = "0.5"
 parking_lot = "0.12"
+reqwest = { version = "0.12", default-features = false, features = ["json", "rustls-tls"] }
 sysinfo = "0.33"
 flate2 = "1"
 tauri-plugin-autostart = "2"

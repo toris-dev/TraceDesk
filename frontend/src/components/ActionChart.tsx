@@ -11,19 +11,25 @@ import {
 import type { ActionHourlyPoint } from "../api/client";
 import { useI18n } from "../i18n";
 import { useTheme } from "../theme";
+import { CYBER } from "../theme/cyberTokens";
 
 interface Props {
   data: ActionHourlyPoint[];
+  variant?: "stacked" | "grouped";
+  height?: number;
 }
 
-export function ActionChart({ data }: Props) {
+export function ActionChart({ data, variant = "grouped", height = 200 }: Props) {
   const { t } = useI18n();
   const { chart } = useTheme();
   const hasData = data.some((d) => d.copy + d.paste + d.screenshot > 0);
 
   if (!hasData) {
     return (
-      <div className="flex h-40 items-center justify-center text-text-muted text-sm">
+      <div
+        className="flex items-center justify-center text-text-muted text-sm"
+        style={{ height }}
+      >
         {t("actions.noChartData")}
       </div>
     );
@@ -34,26 +40,48 @@ export function ActionChart({ data }: Props) {
     copy: d.copy,
     paste: d.paste,
     screenshot: d.screenshot,
+    total: d.copy + d.paste + d.screenshot,
   }));
 
+  const tooltipStyle = {
+    background: chart.tooltipBg,
+    border: `1px solid ${chart.tooltipBorder}`,
+    borderRadius: 8,
+    color: chart.tooltipText,
+    fontFamily: "var(--cyber-font-mono)",
+    fontSize: 12,
+  };
+
   return (
-    <ResponsiveContainer width="100%" height={200}>
-      <BarChart data={chartData}>
-        <CartesianGrid strokeDasharray="3 3" stroke={chart.grid} />
-        <XAxis dataKey="hour" stroke={chart.axis} fontSize={10} interval={3} />
-        <YAxis stroke={chart.axis} fontSize={11} allowDecimals={false} />
+    <ResponsiveContainer width="100%" height={height}>
+      <BarChart data={chartData} barGap={variant === "grouped" ? 1 : 0} barCategoryGap="12%">
+        <CartesianGrid strokeDasharray="3 3" stroke={chart.grid} vertical={false} />
+        <XAxis dataKey="hour" stroke={chart.axis} fontSize={10} interval={2} tick={{ fill: chart.axis }} />
+        <YAxis stroke={chart.axis} fontSize={11} allowDecimals={false} tick={{ fill: chart.axis }} />
         <Tooltip
-          contentStyle={{
-            background: chart.tooltipBg,
-            border: `1px solid ${chart.tooltipBorder}`,
-            borderRadius: 8,
-            color: chart.tooltipText,
-          }}
+          contentStyle={tooltipStyle}
+          formatter={(value, name) => [`${value}회`, name]}
         />
         <Legend wrapperStyle={{ fontSize: 12, color: chart.tooltipText }} />
-        <Bar dataKey="copy" name={t("actions.copy")} fill={chart.success} stackId="a" radius={[0, 0, 0, 0]} />
-        <Bar dataKey="paste" name={t("actions.paste")} fill={chart.warning} stackId="a" />
-        <Bar dataKey="screenshot" name={t("events.SCREENSHOT")} fill={chart.danger} stackId="a" radius={[4, 4, 0, 0]} />
+        {variant === "grouped" ? (
+          <>
+            <Bar dataKey="copy" name={t("actions.copy")} fill={CYBER.green} radius={[3, 3, 0, 0]} maxBarSize={14} />
+            <Bar dataKey="paste" name={t("actions.paste")} fill={CYBER.amber} radius={[3, 3, 0, 0]} maxBarSize={14} />
+            <Bar
+              dataKey="screenshot"
+              name={t("actions.capture")}
+              fill={CYBER.magenta}
+              radius={[3, 3, 0, 0]}
+              maxBarSize={14}
+            />
+          </>
+        ) : (
+          <>
+            <Bar dataKey="copy" name={t("actions.copy")} fill={CYBER.green} stackId="a" />
+            <Bar dataKey="paste" name={t("actions.paste")} fill={CYBER.amber} stackId="a" />
+            <Bar dataKey="screenshot" name={t("actions.capture")} fill={CYBER.magenta} stackId="a" radius={[4, 4, 0, 0]} />
+          </>
+        )}
       </BarChart>
     </ResponsiveContainer>
   );

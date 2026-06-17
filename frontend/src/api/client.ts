@@ -172,6 +172,75 @@ async function invokeCmd<T>(cmd: string, args?: Record<string, unknown>): Promis
   return invoke<T>(cmd, args);
 }
 
+export function getActionEvents(date?: string) {
+  return invokeCmd<ActivityItem[]>("get_action_events", { date: date ?? null });
+}
+
+export interface LlmConfigView {
+  provider: string;
+  model: string;
+  ollama_base_url: string;
+  api_base_url: string;
+  has_api_key: boolean;
+  connected: boolean;
+}
+
+export interface LlmModelInfo {
+  id: string;
+  name: string;
+}
+
+export interface LlmChatResult {
+  answer: string;
+  model: string;
+  provider: string;
+}
+
+export function getLlmConfig() {
+  return invokeCmd<LlmConfigView>("get_llm_config");
+}
+
+export function updateLlmSettings(opts: {
+  provider?: string;
+  model?: string;
+  ollamaBaseUrl?: string;
+  apiBaseUrl?: string;
+}) {
+  return invokeCmd<LlmConfigView>("update_llm_settings", {
+    provider: opts.provider ?? null,
+    model: opts.model ?? null,
+    ollamaBaseUrl: opts.ollamaBaseUrl ?? null,
+    apiBaseUrl: opts.apiBaseUrl ?? null,
+  });
+}
+
+export function setLlmApiKey(apiKey: string | null) {
+  return invokeCmd<LlmConfigView>("set_llm_api_key", { apiKey });
+}
+
+export function llmListModels() {
+  return invokeCmd<LlmModelInfo[]>("llm_list_models");
+}
+
+export function llmTestConnection() {
+  return invokeCmd<string>("llm_test_connection");
+}
+
+export function llmAskActions(question: string, date?: string) {
+  return invokeCmd<LlmChatResult>("llm_ask_actions", {
+    question,
+    date: date ?? null,
+  });
+}
+
+export function llmChat(message: string, includeActivity: boolean, date?: string) {
+  return invokeCmd<LlmChatResult>("llm_chat", {
+    message,
+    includeActivity,
+    date: date ?? null,
+  });
+}
+
 export function getActivityBundle(date?: string) {
   return invokeCmd<ActivityBundle>("get_activity_bundle", { date: date ?? null });
 }
@@ -287,6 +356,10 @@ export interface AppSettings {
   theme: string;
   setup_completed: boolean;
   first_run_completed: boolean;
+  llm_provider: string;
+  llm_model: string;
+  ollama_base_url: string;
+  api_base_url: string;
 }
 
 export interface ArchiveInfo {

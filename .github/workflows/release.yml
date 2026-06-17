@@ -53,17 +53,21 @@ jobs:
           tagName: ${{ github.ref_name }}
           releaseName: TraceDesk ${{ github.ref_name }}
           releaseBody: |
-            ## v0.1.4
+            ## v0.1.5
 
-            ### UI/UX
-            - 사이버네틱 HUD 스타일 전역 적용 (시안 네온 팔레트, Orbitron/Exo 2/JetBrains Mono)
-            - 통합 모니터링 커맨드 센터 탭 추가
-            - 거북이 마스코트·트레이 아이콘 갱신
+            ### 행동 기록
+            - Obsidian 스타일 **행동 그래프** 탐색기 (앱·클립보드·URL 연결 시각화)
+            - 그래프 검색으로 복사·붙여넣기·캡처 내역 빠르게 찾기
+            - 시간대별 행동 차트·타임라인 스트립 개선
 
-            ### 성능
-            - 시스템 메트릭 캐시·폴링 최적화 (CPU/메모리/포트)
-            - 프론트엔드 폴링 간격·visibility pause·이벤트 버퍼 상한
-            - 액티비티 번들·스크린샷 큐 경량화
+            ### AI / LLM
+            - 설정에서 **Ollama** 또는 **OpenAI 호환 API** 연결
+            - 연결 상태 배지·연결하기 흐름
+            - 우하단 거북이 **리사이즈 가능 채팅** (활동 기록 컨텍스트 포함)
+
+            ### 백엔드
+            - `get_action_events` — 클립보드 미리보기 포함 상세 행동 API
+            - LLM 채팅·활동 질의 커맨드 (`llm_chat`, `llm_ask_actions`)
 
             ### 설치
             - macOS (Apple Silicon): `TraceDesk_*_aarch64.dmg` — Applications로 드래그

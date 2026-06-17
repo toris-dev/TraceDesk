@@ -45,6 +45,9 @@ import { filterJournalEvents, isJournalEvent } from "./utils/activityFeed";
 const OverviewView = lazy(() =>
   import("./views/OverviewView").then((m) => ({ default: m.OverviewView })),
 );
+const ActionsView = lazy(() =>
+  import("./views/ActionsView").then((m) => ({ default: m.ActionsView })),
+);
 const AnalyticsView = lazy(() =>
   import("./views/AnalyticsView").then((m) => ({ default: m.AnalyticsView })),
 );
@@ -454,13 +457,15 @@ function AppContent({
 
       case "actions":
         return (
-          <div className="max-w-4xl">
-            <ActionHistoryPanel
-              events={actionEvents}
-              viewingToday={viewingToday}
+          <Suspense fallback={<MascotScene mood="loading" title={t("nav.actions")} size="md" />}>
+            <ActionsView
+              stats={stats}
+              selectedDate={selectedDate}
               dateLabel={dateLabel}
+              viewingToday={viewingToday}
+              liveEvents={actionEvents}
             />
-          </div>
+          </Suspense>
         );
 
       case "timeline":
@@ -583,6 +588,8 @@ function AppContent({
         productivityScore={productivity?.score}
         activeTab={mascotTab}
         setupCompleted={appSettings.setup_completed}
+        selectedDate={selectedDate}
+        onOpenSettings={() => setPage("settings")}
       />
     </>
   );
