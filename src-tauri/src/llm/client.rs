@@ -24,10 +24,24 @@ fn http() -> Result<reqwest::Client> {
         .context("failed to build HTTP client")
 }
 
+fn openai_auth_key(require_api_key: bool) -> Result<String> {
+    let key = load_secrets().api_key.trim().to_string();
+    if require_api_key && key.is_empty() {
+        return Err(anyhow!("API 키가 설정되지 않았습니다"));
+    }
+    Ok(if key.is_empty() {
+        "lm-studio".into()
+    } else {
+        key
+    })
+}
+
 pub async fn list_models(settings: &AppSettings) -> Result<Vec<LlmModelInfo>> {
     match settings.llm_provider.as_str() {
         "ollama" => list_ollama_models(&settings.ollama_base_url).await,
-        "openai" => list_openai_models(settings).await,
+        "lmstudio" => list_openai_compatible_models(settings, false, false).await,
+        "mlxlm" => list_openai_compatible_models(settings, false, false).await,
+        "openai" => list_openai_compatible_models(settings, true, true).await,
         other => Err(anyhow!("unsupported provider: {other}")),
     }
 }
@@ -64,22 +78,20 @@ async fn list_ollama_models(base_url: &str) -> Result<Vec<LlmModelInfo>> {
         .collect())
 }
 
-async fn list_openai_models(settings: &AppSettings) -> Result<Vec<LlmModelInfo>> {
-    let key = load_secrets().api_key.trim().to_string();
-    if key.is_empty() {
-        return Err(anyhow!("API 키가 설정되지 않았습니다"));
-    }
+async fn list_openai_compatible_models(
+    settings: &AppSettings,
+    require_api_key: bool,
+    filter_cloud_models: bool,
+) -> Result<Vec<LlmModelInfo>> {
+    let key = openai_auth_key(require_api_key)?;
 
-    let url = format!(
-        "{}/models",
-        settings.api_base_url.trim_end_matches('/')
-    );
+    let url = format!("{}/models", settings.api_base_url.trim_end_matches('/'));
     let resp = http()?
         .get(&url)
         .bearer_auth(&key)
         .send()
         .await
-        .context("API 서버 연결 실패")?;
+        .context("API 서버 연결 실패 — 서버가 실행 중인지 확인하세요")?;
 
     if !resp.status().is_success() {
         let status = resp.status();
@@ -101,6 +113,9 @@ async fn list_openai_models(settings: &AppSettings) -> Result<Vec<LlmModelInfo>>
         .data
         .into_iter()
         .filter(|m| {
+            if !filter_cloud_models {
+                return true;
+            }
             m.id.contains("gpt")
                 || m.id.contains("o1")
                 || m.id.contains("o3")
@@ -138,7 +153,9 @@ pub async fn chat(
 
     match settings.llm_provider.as_str() {
         "ollama" => chat_ollama(settings, model, system, user).await,
-        "openai" => chat_openai(settings, model, system, user).await,
+        "lmstudio" => chat_openai_compatible(settings, model, system, user, false, "lmstudio").await,
+        "mlxlm" => chat_openai_compatible(settings, model, system, user, false, "mlxlm").await,
+        "openai" => chat_openai_compatible(settings, model, system, user, true, "openai").await,
         other => Err(anyhow!("unsupported provider: {other}")),
     }
 }
@@ -193,16 +210,15 @@ async fn chat_ollama(
     })
 }
 
-async fn chat_openai(
+async fn chat_openai_compatible(
     settings: &AppSettings,
     model: &str,
     system: &str,
     user: &str,
+    require_api_key: bool,
+    provider: &str,
 ) -> Result<LlmChatResult> {
-    let key = load_secrets().api_key.trim().to_string();
-    if key.is_empty() {
-        return Err(anyhow!("API 키가 설정되지 않았습니다"));
-    }
+    let key = openai_auth_key(require_api_key)?;
 
     let url = format!(
         "{}/chat/completions",
@@ -256,7 +272,7 @@ async fn chat_openai(
     Ok(LlmChatResult {
         answer: answer.trim().to_string(),
         model: model.to_string(),
-        provider: "openai".into(),
+        provider: provider.to_string(),
     })
 }
 

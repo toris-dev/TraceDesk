@@ -40,7 +40,7 @@ pub struct AppSettings {
     pub setup_completed: bool,
     #[serde(default)]
     pub first_run_completed: bool,
-    /// `ollama` | `openai` (OpenAI-compatible API)
+    /// `ollama` | `lmstudio` | `mlxlm` | `openai` (OpenAI-compatible API)
     #[serde(default = "default_llm_provider")]
     pub llm_provider: String,
     #[serde(default)]
@@ -66,9 +66,38 @@ fn default_api_base_url() -> String {
     "https://api.openai.com/v1".into()
 }
 
+fn default_lmstudio_url() -> String {
+    "http://127.0.0.1:1234/v1".into()
+}
+
+fn default_mlxlm_url() -> String {
+    "http://127.0.0.1:8080/v1".into()
+}
+
+pub fn default_url_for_llm_provider(provider: &str) -> String {
+    match provider {
+        "openai" => default_api_base_url(),
+        "lmstudio" => default_lmstudio_url(),
+        "mlxlm" => default_mlxlm_url(),
+        _ => default_ollama_url(),
+    }
+}
+
+pub fn is_default_api_base_url(url: &str) -> bool {
+    url == default_url_for_llm_provider("openai")
+        || url == default_url_for_llm_provider("lmstudio")
+        || url == default_url_for_llm_provider("mlxlm")
+}
+
+pub fn uses_api_base_url(provider: &str) -> bool {
+    matches!(provider, "openai" | "lmstudio" | "mlxlm")
+}
+
 pub fn normalize_llm_provider(value: &str) -> String {
     match value {
         "openai" | "api" => "openai".into(),
+        "lmstudio" | "lm_studio" | "lm-studio" => "lmstudio".into(),
+        "mlxlm" | "mlx_lm" | "mlx-lm" => "mlxlm".into(),
         _ => "ollama".into(),
     }
 }

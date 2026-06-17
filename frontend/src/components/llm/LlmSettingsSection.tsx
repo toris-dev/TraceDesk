@@ -9,7 +9,20 @@ import {
 } from "../../api/client";
 import { useI18n } from "../../i18n";
 
-type Provider = "ollama" | "openai";
+type Provider = "ollama" | "lmstudio" | "mlxlm" | "openai";
+
+function providerLabel(t: (key: string) => string, p: Provider): string {
+  switch (p) {
+    case "ollama":
+      return t("llm.providerOllama");
+    case "lmstudio":
+      return t("llm.providerLmStudio");
+    case "mlxlm":
+      return t("llm.providerMlxLm");
+    case "openai":
+      return t("llm.providerApi");
+  }
+}
 
 export function LlmSettingsSection() {
   const { t } = useI18n();
@@ -122,8 +135,29 @@ export function LlmSettingsSection() {
   if (!config) return null;
 
   const isOllama = config.provider === "ollama";
-  const needsApiKey = !isOllama && !config.has_api_key;
+  const isLmStudio = config.provider === "lmstudio";
+  const isMlxLm = config.provider === "mlxlm";
+  const isLocalOpenAi = isLmStudio || isMlxLm;
+  const isOpenAi = config.provider === "openai";
+  const needsApiKey = isOpenAi && !config.has_api_key;
   const canConnect = !!config.model && !needsApiKey;
+
+  const serverUrlLabel = isLmStudio
+    ? t("llm.lmStudioUrl")
+    : isMlxLm
+      ? t("llm.mlxLmUrl")
+      : t("llm.apiBaseUrl");
+  const serverUrlHint = isLmStudio
+    ? t("llm.lmStudioHint")
+    : isMlxLm
+      ? t("llm.mlxLmHint")
+      : t("llm.apiBaseHint");
+  const serverUrlPlaceholder = isLmStudio
+    ? "http://127.0.0.1:1234/v1"
+    : isMlxLm
+      ? "http://127.0.0.1:8080/v1"
+      : "https://api.openai.com/v1";
+  const noKeyHint = isLmStudio ? t("llm.lmStudioNoKey") : isMlxLm ? t("llm.mlxLmNoKey") : null;
 
   return (
     <section className="rounded-xl border border-border bg-surface-elevated p-5 space-y-4">
@@ -144,7 +178,7 @@ export function LlmSettingsSection() {
       </div>
 
       <div className="flex flex-wrap gap-2">
-        {(["ollama", "openai"] as const).map((p) => (
+        {(["ollama", "lmstudio", "mlxlm", "openai"] as const).map((p) => (
           <button
             key={p}
             type="button"
@@ -156,7 +190,7 @@ export function LlmSettingsSection() {
                 : "border-border hover:bg-surface"
             }`}
           >
-            {p === "ollama" ? t("llm.providerOllama") : t("llm.providerApi")}
+            {providerLabel(t, p)}
           </button>
         ))}
       </div>
@@ -179,7 +213,7 @@ export function LlmSettingsSection() {
       ) : (
         <>
           <label className="block text-sm space-y-1">
-            <span className="text-text-muted">{t("llm.apiBaseUrl")}</span>
+            <span className="text-text-muted">{serverUrlLabel}</span>
             <input
               type="url"
               defaultValue={config.api_base_url}
@@ -189,31 +223,36 @@ export function LlmSettingsSection() {
                   saveField({ apiBaseUrl: e.target.value });
                 }
               }}
-              placeholder="https://api.openai.com/v1"
+              placeholder={serverUrlPlaceholder}
               className="w-full rounded-lg border border-border bg-surface px-3 py-2 text-sm font-data"
             />
           </label>
-          <p className="text-[11px] text-text-muted">{t("llm.apiBaseHint")}</p>
-          <label className="block text-sm space-y-1">
-            <span className="text-text-muted">{t("llm.apiKey")}</span>
-            <div className="flex gap-2">
-              <input
-                type="password"
-                value={apiKeyInput}
-                onChange={(e) => setApiKeyInput(e.target.value)}
-                placeholder={config.has_api_key ? t("llm.apiKeySet") : "sk-…"}
-                className="flex-1 rounded-lg border border-border bg-surface px-3 py-2 text-sm font-data"
-              />
-              <button
-                type="button"
-                disabled={loading}
-                onClick={saveApiKey}
-                className="shrink-0 px-3 py-2 rounded-lg border border-border text-sm hover:bg-surface"
-              >
-                {t("llm.saveKey")}
-              </button>
-            </div>
-          </label>
+          <p className="text-[11px] text-text-muted">{serverUrlHint}</p>
+          {!isLocalOpenAi && (
+            <label className="block text-sm space-y-1">
+              <span className="text-text-muted">{t("llm.apiKey")}</span>
+              <div className="flex gap-2">
+                <input
+                  type="password"
+                  value={apiKeyInput}
+                  onChange={(e) => setApiKeyInput(e.target.value)}
+                  placeholder={config.has_api_key ? t("llm.apiKeySet") : "sk-…"}
+                  className="flex-1 rounded-lg border border-border bg-surface px-3 py-2 text-sm font-data"
+                />
+                <button
+                  type="button"
+                  disabled={loading}
+                  onClick={saveApiKey}
+                  className="shrink-0 px-3 py-2 rounded-lg border border-border text-sm hover:bg-surface"
+                >
+                  {t("llm.saveKey")}
+                </button>
+              </div>
+            </label>
+          )}
+          {noKeyHint && (
+            <p className="text-[11px] text-text-muted">{noKeyHint}</p>
+          )}
         </>
       )}
 
@@ -248,7 +287,9 @@ export function LlmSettingsSection() {
               disabled={loading}
               onChange={(e) => setConfig({ ...config, model: e.target.value })}
               onBlur={() => saveField({ model: config.model })}
-              placeholder={isOllama ? "llama3.2" : "gpt-4o-mini"}
+              placeholder={
+                isOllama ? "llama3.2" : isLocalOpenAi ? "local-model" : "gpt-4o-mini"
+              }
               className="w-full rounded-lg border border-border bg-surface px-3 py-2 text-sm font-data"
             />
           )}

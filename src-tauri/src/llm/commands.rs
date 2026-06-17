@@ -1,7 +1,10 @@
 use crate::llm::client::{chat, list_models, test_connection, LlmChatResult, LlmModelInfo};
 use crate::llm::context::{build_action_context, system_prompt, user_prompt};
 use crate::llm::secrets::{has_api_key, load_secrets, save_secrets, LlmSecrets};
-use crate::settings::{normalize_llm_provider, save_settings, AppSettings};
+use crate::settings::{
+    default_url_for_llm_provider, is_default_api_base_url, normalize_llm_provider, save_settings,
+    uses_api_base_url, AppSettings,
+};
 use crate::settings_commands::SettingsState;
 use crate::state::AppState;
 use chrono::NaiveDate;
@@ -46,7 +49,14 @@ pub fn update_llm_settings(
     let mut settings = state.0.write().map_err(|e| e.to_string())?;
 
     if let Some(v) = provider {
-        settings.llm_provider = normalize_llm_provider(&v);
+        let next = normalize_llm_provider(&v);
+        if uses_api_base_url(&next) {
+            if settings.api_base_url.trim().is_empty() || is_default_api_base_url(&settings.api_base_url)
+            {
+                settings.api_base_url = default_url_for_llm_provider(&next);
+            }
+        }
+        settings.llm_provider = next;
         settings.llm_connected = false;
     }
     if let Some(v) = model {
