@@ -3,7 +3,7 @@ use crate::export::run_export;
 use crate::state::AppState;
 use tauri::menu::{Menu, MenuItem, PredefinedMenuItem, Submenu};
 use tauri::{AppHandle, Emitter, Manager};
-use tauri_plugin_shell::ShellExt;
+use tauri_plugin_opener::OpenerExt;
 
 pub const MENU_SHOW: &str = "tray-show";
 pub const MENU_QUIT: &str = "menu-quit";
@@ -98,7 +98,6 @@ struct MenuStrings {
     permissions: &'static str,
     tray_open: &'static str,
     tray_tooltip: &'static str,
-    export_empty: &'static str,
     state_error: &'static str,
     open_data_error: &'static str,
 }
@@ -136,7 +135,6 @@ fn menu_strings(locale: &str) -> MenuStrings {
             permissions: "Check Input Monitoring Permission",
             tray_open: "Open TraceDesk",
             tray_tooltip: "TraceDesk — tracking activity",
-            export_empty: "No records to export.",
             state_error: "Could not load app state.",
             open_data_error: "Could not open data folder",
         }
@@ -172,7 +170,6 @@ fn menu_strings(locale: &str) -> MenuStrings {
             permissions: "입력 모니터링 권한 확인",
             tray_open: "TraceDesk 열기",
             tray_tooltip: "TraceDesk — 활동 추적 중",
-            export_empty: "내보낼 기록이 없습니다.",
             state_error: "앱 상태를 불러올 수 없습니다.",
             open_data_error: "데이터 폴더를 열 수 없습니다",
         }
@@ -428,7 +425,7 @@ fn open_data_folder(app: &AppHandle) {
     if let Err(e) = std::fs::create_dir_all(&dir) {
         tracing::warn!(error = %e, "failed to ensure data directory");
     }
-    if let Err(e) = app.shell().open(dir.to_string_lossy().into_owned(), None) {
+    if let Err(e) = app.opener().open_path(dir.to_string_lossy().into_owned(), None::<&str>) {
         tracing::warn!(error = %e, path = %dir.display(), "failed to open data folder");
         let _ = app.emit(EVENT_ERROR, format!("{}: {e}", s.open_data_error));
     }

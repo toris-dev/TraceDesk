@@ -140,7 +140,7 @@ export function LlmSettingsSection() {
   const isLocalOpenAi = isLmStudio || isMlxLm;
   const isOpenAi = config.provider === "openai";
   const needsApiKey = isOpenAi && !config.has_api_key;
-  const canConnect = !!config.model && !needsApiKey;
+  const canConnect = (isMlxLm || !!config.model) && !needsApiKey;
 
   const serverUrlLabel = isLmStudio
     ? t("llm.lmStudioUrl")
@@ -288,7 +288,13 @@ export function LlmSettingsSection() {
               onChange={(e) => setConfig({ ...config, model: e.target.value })}
               onBlur={() => saveField({ model: config.model })}
               placeholder={
-                isOllama ? "llama3.2" : isLocalOpenAi ? "local-model" : "gpt-4o-mini"
+                isOllama
+                  ? "llama3.2"
+                  : isMlxLm
+                    ? t("llm.mlxLmModelOptional")
+                    : isLocalOpenAi
+                      ? "local-model"
+                      : "gpt-4o-mini"
               }
               className="w-full rounded-lg border border-border bg-surface px-3 py-2 text-sm font-data"
             />

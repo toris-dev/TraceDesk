@@ -129,7 +129,7 @@ async fn list_openai_compatible_models(
         .collect();
 
     if models.is_empty() {
-        if !settings.llm_model.trim().is_empty() {
+        if !settings.llm_model.trim().is_empty() && settings.llm_provider != "mlxlm" {
             models.push(LlmModelInfo {
                 id: settings.llm_model.clone(),
                 name: settings.llm_model.clone(),
@@ -141,22 +141,89 @@ async fn list_openai_compatible_models(
     Ok(models)
 }
 
+/// MLX-LM: omit `model` in chat to use the server `--model` default. Only send ids from `/v1/models`.
+pub async fn resolve_mlx_chat_model(settings: &AppSettings) -> Result<Option<String>> {
+    let saved = settings.llm_model.trim();
+    let available = list_openai_compatible_models(settings, false, false).await?;
+
+    if saved.is_empty() {
+        if available.len() == 1 {
+            return Ok(Some(available[0].id.clone()));
+        }
+        return Ok(None);
+    }
+
+    if available.iter().any(|m| m.id == saved) {
+        return Ok(Some(saved.to_string()));
+    }
+
+    if let Some(m) = available.iter().find(|m| {
+        m.id.ends_with(saved)
+            || m.id.strip_prefix("mlx-community/")
+                .is_some_and(|s| s == saved)
+    }) {
+        return Ok(Some(m.id.clone()));
+    }
+
+    // Short names like `Qwen2.5-14B-Instruct-4bit` make mlx_lm fetch the wrong HF repo.
+    if !saved.contains('/') {
+        tracing::warn!(
+            model = saved,
+            "mlx model id is not a full repo path; using server default model"
+        );
+        return Ok(None);
+    }
+
+    Ok(Some(saved.to_string()))
+}
+
+fn format_openai_chat_error(status: reqwest::StatusCode, text: &str) -> String {
+    if text.contains("Repository Not Found") || text.contains("huggingface.co") {
+        return format!(
+            "MLX 모델을 찾을 수 없습니다 ({status}). \
+            mlx_lm.server 실행 시 지정한 모델과 동일한 Hugging Face id(예: mlx-community/…)를 쓰거나, \
+            모델 필드를 비우고 「연결하기」를 다시 눌러 주세요. \
+            서버 응답: {text}"
+        );
+    }
+    format!("API 채팅 실패 ({status}): {text}")
+}
+
 pub async fn chat(
     settings: &AppSettings,
     system: &str,
     user: &str,
 ) -> Result<LlmChatResult> {
-    let model = settings.llm_model.trim();
-    if model.is_empty() {
-        return Err(anyhow!("모델이 선택되지 않았습니다"));
-    }
-
     match settings.llm_provider.as_str() {
-        "ollama" => chat_ollama(settings, model, system, user).await,
-        "lmstudio" => chat_openai_compatible(settings, model, system, user, false, "lmstudio").await,
-        "mlxlm" => chat_openai_compatible(settings, model, system, user, false, "mlxlm").await,
-        "openai" => chat_openai_compatible(settings, model, system, user, true, "openai").await,
-        other => Err(anyhow!("unsupported provider: {other}")),
+        "mlxlm" => {
+            let resolved = resolve_mlx_chat_model(settings).await?;
+            chat_openai_compatible(settings, resolved.as_deref(), system, user, false, "mlxlm").await
+        }
+        other => {
+            let model = settings.llm_model.trim();
+            if model.is_empty() {
+                return Err(anyhow!("모델이 선택되지 않았습니다"));
+            }
+            match other {
+                "ollama" => chat_ollama(settings, model, system, user).await,
+                "lmstudio" => {
+                    chat_openai_compatible(
+                        settings,
+                        Some(model),
+                        system,
+                        user,
+                        false,
+                        "lmstudio",
+                    )
+                    .await
+                }
+                "openai" => {
+                    chat_openai_compatible(settings, Some(model), system, user, true, "openai")
+                        .await
+                }
+                _ => Err(anyhow!("unsupported provider: {other}")),
+            }
+        }
     }
 }
 
@@ -212,7 +279,7 @@ async fn chat_ollama(
 
 async fn chat_openai_compatible(
     settings: &AppSettings,
-    model: &str,
+    model: Option<&str>,
     system: &str,
     user: &str,
     require_api_key: bool,
@@ -225,14 +292,18 @@ async fn chat_openai_compatible(
         settings.api_base_url.trim_end_matches('/')
     );
 
-    let body = json!({
-        "model": model,
-        "messages": [
+    let mut body = serde_json::Map::new();
+    if let Some(model) = model.filter(|m| !m.is_empty()) {
+        body.insert("model".into(), json!(model));
+    }
+    body.insert(
+        "messages".into(),
+        json!([
             { "role": "system", "content": system },
             { "role": "user", "content": user }
-        ],
-        "temperature": 0.3
-    });
+        ]),
+    );
+    body.insert("temperature".into(), json!(0.3));
 
     let resp = http()?
         .post(&url)
@@ -245,7 +316,7 @@ async fn chat_openai_compatible(
     if !resp.status().is_success() {
         let status = resp.status();
         let text = resp.text().await.unwrap_or_default();
-        return Err(anyhow!("API 채팅 실패 ({status}): {text}"));
+        return Err(anyhow!(format_openai_chat_error(status, &text)));
     }
 
     #[derive(Deserialize)]
@@ -271,14 +342,20 @@ async fn chat_openai_compatible(
 
     Ok(LlmChatResult {
         answer: answer.trim().to_string(),
-        model: model.to_string(),
+        model: model.unwrap_or("default").to_string(),
         provider: provider.to_string(),
     })
 }
 
 pub async fn test_connection(settings: &AppSettings) -> Result<String> {
+    let mut effective = settings.clone();
+    if settings.llm_provider == "mlxlm" {
+        let resolved = resolve_mlx_chat_model(settings).await?;
+        effective.llm_model = resolved.unwrap_or_default();
+    }
+
     let result = chat(
-        settings,
+        &effective,
         "You are a helpful assistant. Reply in one short sentence.",
         "Say hello in Korean.",
     )

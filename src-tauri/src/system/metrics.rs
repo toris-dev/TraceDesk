@@ -113,7 +113,10 @@ pub fn collect_snapshot(mon: &mut SystemMonitor) -> Result<SystemSnapshot> {
     }
 
     if mon.should_refresh_ports() {
-        mon.refresh_ports()?;
+        if let Err(e) = mon.refresh_ports() {
+            tracing::warn!("port scan failed: {e:#}");
+            mon.last_ports_at = Some(Instant::now());
+        }
     }
 
     Ok(SystemSnapshot {

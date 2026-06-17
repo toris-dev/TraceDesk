@@ -28,13 +28,24 @@ pub fn list_listening_ports(self_pid: u32) -> Result<Vec<PortInfo>> {
 
 #[cfg(unix)]
 fn list_ports_unix(self_pid: u32) -> Result<Vec<PortInfo>> {
-    let output = Command::new("lsof")
+    let output = match Command::new("lsof")
         .args(["-nP", "-iTCP", "-sTCP:LISTEN"])
         .output()
-        .context("failed to run lsof — port listing unavailable")?;
+    {
+        Ok(o) => o,
+        Err(e) => {
+            tracing::debug!("lsof unavailable: {e:#}");
+            return Ok(Vec::new());
+        }
+    };
 
-    if !output.status.success() && output.stdout.is_empty() {
-        anyhow::bail!("lsof failed");
+    if !output.status.success() {
+        tracing::debug!(
+            status = ?output.status,
+            stderr = %String::from_utf8_lossy(&output.stderr),
+            "lsof port scan failed"
+        );
+        return Ok(Vec::new());
     }
 
     let text = String::from_utf8_lossy(&output.stdout);

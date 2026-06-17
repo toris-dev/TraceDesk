@@ -53,12 +53,16 @@ jobs:
           tagName: ${{ github.ref_name }}
           releaseName: TraceDesk ${{ github.ref_name }}
           releaseBody: |
-            ## v0.1.6
+            ## v0.1.7
 
             ### AI / LLM
-            - **LM Studio** 프로바이더 추가 (로컬 OpenAI 호환 API, API 키 불필요)
-            - **MLX-LM** 프로바이더 추가 (Apple Silicon `mlx_lm.server`, 기본 `http://127.0.0.1:8080/v1`)
-            - 로컬 OpenAI 호환 서버 연결 흐름 정리
+            - **MLX-LM** 잘못된 모델 id 전송 시 Hugging Face 404 오류 수정
+            - 짧은 모델명 대신 서버에 로드된 기본 모델 사용 (모델 필드 선택 사항)
+            - 연결 시 `/v1/models`와 모델 id 자동 정리
+
+            ### 안정성
+            - CI `metrics_tests` — `lsof` 미지원 환경에서도 스냅샷 수집 통과
+            - 데이터 폴더 열기: `tauri-plugin-opener`로 전환 (shell deprecation 제거)
 
             ### 설치
             - macOS (Apple Silicon): `TraceDesk_*_aarch64.dmg` — Applications로 드래그

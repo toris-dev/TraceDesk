@@ -1,4 +1,4 @@
-use crate::llm::client::{chat, list_models, test_connection, LlmChatResult, LlmModelInfo};
+use crate::llm::client::{chat, list_models, resolve_mlx_chat_model, test_connection, LlmChatResult, LlmModelInfo};
 use crate::llm::context::{build_action_context, system_prompt, user_prompt};
 use crate::llm::secrets::{has_api_key, load_secrets, save_secrets, LlmSecrets};
 use crate::settings::{
@@ -93,16 +93,23 @@ pub async fn llm_list_models(state: State<'_, SettingsState>) -> Result<Vec<LlmM
 
 #[tauri::command]
 pub async fn llm_test_connection(state: State<'_, SettingsState>) -> Result<String, String> {
-    let settings = state.0.read().map_err(|e| e.to_string())?.clone();
-    let result = test_connection(&settings).await.map_err(|e| e.to_string())?;
+    let mut working = state.0.read().map_err(|e| e.to_string())?.clone();
+    if working.llm_provider == "mlxlm" {
+        let resolved = resolve_mlx_chat_model(&working)
+            .await
+            .map_err(|e| e.to_string())?;
+        working.llm_model = resolved.unwrap_or_default();
+    }
+    let result = test_connection(&working).await.map_err(|e| e.to_string())?;
     let mut settings = state.0.write().map_err(|e| e.to_string())?;
+    *settings = working;
     settings.llm_connected = true;
     save_settings(&settings).map_err(|e| e.to_string())?;
     Ok(result)
 }
 
 fn validate_llm_ready(settings: &AppSettings) -> Result<(), String> {
-    if settings.llm_model.trim().is_empty() {
+    if settings.llm_model.trim().is_empty() && settings.llm_provider != "mlxlm" {
         return Err("설정 → AI / LLM에서 모델을 선택하고 연결하세요".into());
     }
     if settings.llm_provider == "openai" && load_secrets().api_key.trim().is_empty() {
