@@ -4,6 +4,7 @@
 *.db-shm
 *.db-wal
 .DS_Store
+__pycache__/
 
 # Legacy root Rust (removed — use src-tauri)
 /src/
