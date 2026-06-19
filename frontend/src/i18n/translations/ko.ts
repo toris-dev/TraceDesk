@@ -3,6 +3,14 @@ export type TranslationTree = {
   language: Record<string, string>;
   nav: Record<string, string>;
   status: Record<string, string>;
+  sidebar: {
+    navigation: string;
+    collapse: string;
+    expand: string;
+    traceCore: string;
+    localOnly: string;
+    group: Record<string, string>;
+  };
   setup: Record<string, string>;
   platform: Record<string, string>;
   app: Record<string, string>;
@@ -86,6 +94,18 @@ export const ko = {
     disconnected: "연결 끊김",
     bgCollecting: "백그라운드 수집 중",
     refreshData: "데이터 새로고침",
+  },
+  sidebar: {
+    navigation: "주 메뉴",
+    collapse: "사이드바 접기",
+    expand: "사이드바 펼치기",
+    traceCore: "TRACE CORE",
+    localOnly: "로컬 저장 · 외부 전송 없음",
+    group: {
+      command: "COMMAND",
+      record: "RECORDS",
+      config: "CONFIG",
+    },
   },
   setup: {
     title: "TraceDesk 초기 설정",
@@ -311,6 +331,18 @@ export const ko = {
     kicker: "DEVPULSE / LOCAL CONTENT PIPELINE",
     title: "Pulse Control Deck",
     description: "로컬 devPulse 파이프라인을 TraceDesk 안에서 실행하고 카드뉴스, 번들 비디오, JSON, SNS 업로드 결과를 확인합니다.",
+    activeTopics: "현재 주제",
+    activeTopicsAll: "전체 주제로 수집 중",
+    depReady: "준비됨",
+    depMissing: "확인 필요",
+    surfaceTrail: "크롤링 · 카드 · 영상 · SNS",
+    openControls: "제어",
+    openCards: "카드",
+    openBundles: "영상 · JSON",
+    openUploads: "SNS",
+    infraTitle: "로컬 인프라",
+    startInfra: "인프라 시작",
+    stopInfra: "인프라 중지",
     runNow: "즉시 업데이트",
     startDaemon: "데몬 시작",
     stopDaemon: "데몬 중지",
@@ -336,7 +368,21 @@ export const ko = {
     scheduleDesc: "TraceDesk 저장 설정으로 devPulse를 로컬에서 예약 실행합니다.",
     save: "저장",
     rootDir: "devPulse 경로",
+    browseRoot: "폴더 선택",
+    dockerTitle: "Docker 상태",
+    dockerBundled: "Docker는 앱에 내장할 수 없습니다. Docker Desktop(또는 동등한 런타임)을 별도로 설치·실행해야 합니다.",
+    dockerInstalled: "CLI 설치됨",
+    dockerMissing: "CLI 없음",
+    dockerRunning: "데몬 실행 중",
+    dockerStopped: "데몬 중지됨",
+    setupTitle: "Pulse 초기 설정",
+    setupDesc: "devPulse 프로젝트 폴더 경로를 지정하면 크롤링·카드·영상 파이프라인을 사용할 수 있습니다.",
+    setupSaveHint: "경로를 입력하거나 폴더를 선택한 뒤 저장하세요.",
+    composeMissing: "devPulse 경로를 설정하면 docker-compose 위치가 표시됩니다.",
     feeds: "피드 목록",
+    topicFilters: "주제 키워드",
+    topicFiltersHint: "줄바꿈 또는 쉼표로 여러 키워드를 입력하면 해당 키워드가 포함된 글만 수집합니다.",
+    topicFiltersPlaceholder: "예: AI agent\nMCP\nbrowser automation",
     cronExpr: "Cron 표현식",
     cronEnabled: "예약 실행 사용",
     batchSize: "배치 크기",

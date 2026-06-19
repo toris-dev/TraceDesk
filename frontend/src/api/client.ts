@@ -216,6 +216,7 @@ function previewSettings(): AppSettings {
     devpulse_cron_enabled: false,
     devpulse_cron_expr: "0 9 * * *",
     devpulse_feeds: ["all", "new", "ask", "show", "top"],
+    devpulse_topic_filters: ["AI agent", "MCP", "automation"],
     devpulse_batch_size: 5,
     devpulse_collect_limit: 0,
     devpulse_idle_poll_sec: 90,
@@ -440,9 +441,13 @@ async function mockInvoke<T>(cmd: string, args?: Record<string, unknown>): Promi
     } satisfies DbStats,
     get_devpulse_config: {
       root_dir: "/Users/toris/projects/devPulse",
+      root_ready: true,
+      root_exists: true,
+      setup_hint: "",
       cron_enabled: false,
       cron_expr: "0 9 * * *",
       feeds: ["all", "new", "ask", "show", "top"],
+      topic_filters: ["AI agent", "MCP", "automation"],
       batch_size: 5,
       collect_limit: 0,
       idle_poll_sec: 90,
@@ -455,9 +460,13 @@ async function mockInvoke<T>(cmd: string, args?: Record<string, unknown>): Promi
     get_devpulse_status: {
       config: {
         root_dir: "/Users/toris/projects/devPulse",
+        root_ready: true,
+        root_exists: true,
+        setup_hint: "",
         cron_enabled: false,
         cron_expr: "0 9 * * *",
         feeds: ["all", "new", "ask", "show", "top"],
+        topic_filters: ["AI agent", "MCP", "automation"],
         batch_size: 5,
         collect_limit: 0,
         idle_poll_sec: 90,
@@ -474,6 +483,43 @@ async function mockInvoke<T>(cmd: string, args?: Record<string, unknown>): Promi
         last_run_at: "2026-06-19T21:50:00+09:00",
         last_error: null,
       },
+      dependencies: [
+        {
+          key: "python",
+          label: "Python",
+          target: "/Users/toris/projects/devPulse/.venv/bin/python",
+          ready: true,
+          detail: "ready",
+        },
+        {
+          key: "database",
+          label: "Postgres",
+          target: "postgresql://devpulse:devpulse@localhost:5434/devpulse",
+          ready: false,
+          detail: "Connection refused",
+        },
+        {
+          key: "minio",
+          label: "MinIO",
+          target: "http://localhost:9000",
+          ready: false,
+          detail: "Connection refused",
+        },
+        {
+          key: "qdrant",
+          label: "Qdrant",
+          target: "http://localhost:6333",
+          ready: false,
+          detail: "Connection refused",
+        },
+        {
+          key: "llm",
+          label: "LLM / ollama",
+          target: "http://localhost:11434",
+          ready: true,
+          detail: "ready",
+        },
+      ],
       payload: {
         progress: {
           daemon_status: "대기",
@@ -549,17 +595,42 @@ async function mockInvoke<T>(cmd: string, args?: Record<string, unknown>): Promi
         generated_at: "2026-06-19T21:50:00+09:00",
       },
     } satisfies DevPulseStatusView,
+    get_devpulse_infra_status: {
+      docker_available: true,
+      docker_daemon_ready: false,
+      compose_dir: "/Users/toris/projects/devPulse/infra",
+      services: [
+        { name: "postgres", running: false },
+        { name: "redis", running: false },
+        { name: "minio", running: false },
+        { name: "qdrant", running: false },
+      ],
+      detail: "Cannot connect to the Docker daemon",
+    } satisfies DevPulseInfraStatusView,
   };
 
   if (cmd === "update_settings") return { ...previewSettings(), ...definedSettings(args) } as T;
   if (cmd === "complete_setup") return { settings: previewSettings(), permissions: okPermissions } as T;
   if (cmd === "export_activity") return { saved: true, path: "/tmp/tracedesk-preview.csv", row_count: 63 } as T;
   if (cmd === "set_llm_api_key" || cmd === "update_llm_settings") return responses.get_llm_config as T;
+  if (cmd === "pick_devpulse_root_dir") {
+    const root = (args?.rootDir as string | undefined) ?? "/Users/toris/projects/devPulse";
+    return {
+      ...(responses.get_devpulse_config as Record<string, unknown>),
+      root_dir: root,
+      root_ready: true,
+      root_exists: true,
+      setup_hint: "",
+    } as T;
+  }
   if (cmd === "update_devpulse_settings") {
     return { ...(responses.get_devpulse_config as Record<string, unknown>), ...(args ?? {}) } as T;
   }
   if (cmd === "get_devpulse_secrets_status" || cmd === "update_devpulse_secrets") {
     return { has_mastodon_token: Boolean(args?.mastodonAccessToken) } as T;
+  }
+  if (cmd === "get_devpulse_infra_status" || cmd === "start_devpulse_infra" || cmd === "stop_devpulse_infra") {
+    return responses.get_devpulse_infra_status as T;
   }
   if (cmd === "run_devpulse_now") return { mode: args?.mode ?? "run", ok: true } as T;
   if (cmd === "start_devpulse_daemon" || cmd === "stop_devpulse_daemon") {
@@ -796,6 +867,7 @@ export interface AppSettings {
   devpulse_cron_enabled: boolean;
   devpulse_cron_expr: string;
   devpulse_feeds: string[];
+  devpulse_topic_filters: string[];
   devpulse_batch_size: number;
   devpulse_collect_limit: number;
   devpulse_idle_poll_sec: number;
@@ -888,9 +960,13 @@ export function runArchiveNow() {
 
 export interface DevPulseConfigView {
   root_dir: string;
+  root_ready: boolean;
+  root_exists: boolean;
+  setup_hint: string;
   cron_enabled: boolean;
   cron_expr: string;
   feeds: string[];
+  topic_filters: string[];
   batch_size: number;
   collect_limit: number;
   idle_poll_sec: number;
@@ -911,6 +987,27 @@ export interface DevPulseRuntimeView {
   run_in_flight: boolean;
   last_run_at: string | null;
   last_error: string | null;
+}
+
+export interface DevPulseDependencyView {
+  key: string;
+  label: string;
+  target: string;
+  ready: boolean;
+  detail: string;
+}
+
+export interface DevPulseInfraServiceView {
+  name: string;
+  running: boolean;
+}
+
+export interface DevPulseInfraStatusView {
+  docker_available: boolean;
+  docker_daemon_ready: boolean;
+  compose_dir: string;
+  services: DevPulseInfraServiceView[];
+  detail: string;
 }
 
 export interface DevPulseCardArtifact {
@@ -949,6 +1046,7 @@ export interface DevPulseDbBundle {
 export interface DevPulseStatusView {
   config: DevPulseConfigView;
   runtime: DevPulseRuntimeView;
+  dependencies: DevPulseDependencyView[];
   payload: {
     progress?: {
       daemon_status?: string;
@@ -1013,6 +1111,7 @@ export function updateDevPulseSettings(opts: {
   cronEnabled?: boolean;
   cronExpr?: string;
   feeds?: string[];
+  topicFilters?: string[];
   batchSize?: number;
   collectLimit?: number;
   idlePollSec?: number;
@@ -1026,6 +1125,7 @@ export function updateDevPulseSettings(opts: {
     cronEnabled: opts.cronEnabled ?? null,
     cronExpr: opts.cronExpr ?? null,
     feeds: opts.feeds ?? null,
+    topicFilters: opts.topicFilters ?? null,
     batchSize: opts.batchSize ?? null,
     collectLimit: opts.collectLimit ?? null,
     idlePollSec: opts.idlePollSec ?? null,
@@ -1046,8 +1146,24 @@ export function updateDevPulseSecrets(opts: { mastodonAccessToken?: string | nul
   });
 }
 
+export function pickDevPulseRootDir() {
+  return invokeCmd<DevPulseConfigView>("pick_devpulse_root_dir");
+}
+
 export function getDevPulseStatus() {
   return invokeCmd<DevPulseStatusView>("get_devpulse_status");
+}
+
+export function getDevPulseInfraStatus() {
+  return invokeCmd<DevPulseInfraStatusView>("get_devpulse_infra_status");
+}
+
+export function startDevPulseInfra() {
+  return invokeCmd<DevPulseInfraStatusView>("start_devpulse_infra");
+}
+
+export function stopDevPulseInfra() {
+  return invokeCmd<DevPulseInfraStatusView>("stop_devpulse_infra");
 }
 
 export function runDevPulseNow(mode: "run" | "collect" | "bundle" | "cleanup" = "run") {
