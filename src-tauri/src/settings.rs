@@ -14,8 +14,11 @@ struct InstallSeed {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct AppSettings {
+    #[serde(default)]
     pub autostart_enabled: bool,
+    #[serde(default = "default_retention_days")]
     pub retention_days: u32,
+    #[serde(default)]
     pub last_archive_at: Option<String>,
     /// 사용자가 접근성 권한 요청에 동의했는지
     #[serde(default)]
@@ -67,6 +70,10 @@ fn default_ollama_url() -> String {
 
 fn default_api_base_url() -> String {
     "https://api.openai.com/v1".into()
+}
+
+fn default_retention_days() -> u32 {
+    DEFAULT_RETENTION_DAYS
 }
 
 fn default_lmstudio_url() -> String {
@@ -133,7 +140,7 @@ impl Default for AppSettings {
     fn default() -> Self {
         Self {
             autostart_enabled: false,
-            retention_days: DEFAULT_RETENTION_DAYS,
+            retention_days: default_retention_days(),
             last_archive_at: None,
             enable_accessibility: false,
             enable_input_monitoring: false,
@@ -150,6 +157,54 @@ impl Default for AppSettings {
             api_base_url: default_api_base_url(),
             llm_connected: false,
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn settings_deserialize_old_files_without_resetting_setup() {
+        let raw = r#"{
+            "autostart_enabled": true,
+            "retention_days": 120,
+            "enable_accessibility": true,
+            "enable_input_monitoring": true,
+            "store_clipboard_preview": false,
+            "store_screenshot_preview": true,
+            "locale": "ko",
+            "theme": "dark",
+            "setup_completed": true,
+            "first_run_completed": true,
+            "llm_provider": "ollama",
+            "llm_model": "llama3"
+        }"#;
+
+        let settings: AppSettings = serde_json::from_str(raw).expect("old settings migrate");
+
+        assert!(settings.setup_completed);
+        assert!(settings.first_run_completed);
+        assert_eq!(settings.retention_days, 120);
+        assert_eq!(settings.llm_model, "llama3");
+        assert_eq!(settings.last_archive_at, None);
+        assert!(!settings.performance_mode);
+        assert_eq!(settings.api_base_url, default_api_base_url());
+    }
+
+    #[test]
+    fn settings_missing_core_fields_get_defaults() {
+        let raw = r#"{
+            "setup_completed": true,
+            "first_run_completed": true
+        }"#;
+
+        let settings: AppSettings = serde_json::from_str(raw).expect("minimal settings migrate");
+
+        assert!(settings.setup_completed);
+        assert_eq!(settings.retention_days, DEFAULT_RETENTION_DAYS);
+        assert!(!settings.autostart_enabled);
+        assert_eq!(settings.locale, default_locale());
     }
 }
 
