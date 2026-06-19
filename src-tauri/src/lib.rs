@@ -138,6 +138,7 @@ pub fn run() {
             commands::get_productivity_analysis,
             commands::get_weekly_report,
             commands::get_available_dates,
+            commands::get_action_date_summaries,
             commands::get_permissions_status,
             commands::request_permissions,
             commands::refresh_permissions,

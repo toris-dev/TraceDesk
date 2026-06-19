@@ -28,6 +28,7 @@ pub fn update_settings(
     store_screenshot_preview: Option<bool>,
     locale: Option<String>,
     theme: Option<String>,
+    performance_mode: Option<bool>,
 ) -> Result<AppSettings, String> {
     let mut settings = state.0.write().map_err(|e| e.to_string())?;
 
@@ -60,6 +61,9 @@ pub fn update_settings(
     }
     if let Some(v) = theme {
         settings.theme = normalize_theme(&v);
+    }
+    if let Some(v) = performance_mode {
+        settings.performance_mode = v;
     }
 
     save_settings(&settings).map_err(|e| e.to_string())?;

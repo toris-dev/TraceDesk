@@ -29,6 +29,17 @@ export interface ActivityItem {
   metadata?: Record<string, unknown>;
 }
 
+export interface ActionDateSummary {
+  date: string;
+  total: number;
+  copy: number;
+  paste: number;
+  screenshot: number;
+  top_location: string | null;
+  latest_time: string | null;
+  latest_app: string | null;
+}
+
 export interface TimelineSegment {
   application: string;
   start: string;
@@ -174,6 +185,10 @@ async function invokeCmd<T>(cmd: string, args?: Record<string, unknown>): Promis
 
 export function getActionEvents(date?: string) {
   return invokeCmd<ActivityItem[]>("get_action_events", { date: date ?? null });
+}
+
+export function getActionDateSummaries(limit = 14) {
+  return invokeCmd<ActionDateSummary[]>("get_action_date_summaries", { limit });
 }
 
 export interface LlmConfigView {
@@ -354,6 +369,7 @@ export interface AppSettings {
   store_screenshot_preview: boolean;
   locale: string;
   theme: string;
+  performance_mode: boolean;
   setup_completed: boolean;
   first_run_completed: boolean;
   llm_provider: string;
@@ -401,6 +417,7 @@ export function updateSettings(opts: {
   storeScreenshotPreview?: boolean;
   locale?: string;
   theme?: string;
+  performanceMode?: boolean;
 }) {
   return invokeCmd<AppSettings>("update_settings", {
     autostartEnabled: opts.autostartEnabled ?? null,
@@ -411,6 +428,7 @@ export function updateSettings(opts: {
     storeScreenshotPreview: opts.storeScreenshotPreview ?? null,
     locale: opts.locale ?? null,
     theme: opts.theme ?? null,
+    performanceMode: opts.performanceMode ?? null,
   });
 }
 

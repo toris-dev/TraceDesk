@@ -1,5 +1,7 @@
-use crate::llm::client::{chat, list_models, resolve_mlx_chat_model, test_connection, LlmChatResult, LlmModelInfo};
-use crate::llm::context::{build_action_context, system_prompt, user_prompt};
+use crate::llm::client::{
+    chat, list_models, resolve_mlx_chat_model, test_connection, LlmChatResult, LlmModelInfo,
+};
+use crate::llm::context::{build_action_context_for_query, system_prompt, user_prompt};
 use crate::llm::secrets::{has_api_key, load_secrets, save_secrets, LlmSecrets};
 use crate::settings::{
     default_url_for_llm_provider, is_default_api_base_url, normalize_llm_provider, save_settings,
@@ -51,7 +53,8 @@ pub fn update_llm_settings(
     if let Some(v) = provider {
         let next = normalize_llm_provider(&v);
         if uses_api_base_url(&next) {
-            if settings.api_base_url.trim().is_empty() || is_default_api_base_url(&settings.api_base_url)
+            if settings.api_base_url.trim().is_empty()
+                || is_default_api_base_url(&settings.api_base_url)
             {
                 settings.api_base_url = default_url_for_llm_provider(&next);
             }
@@ -144,7 +147,8 @@ pub async fn llm_ask_actions(
     validate_llm_ready(&settings)?;
 
     let day = parse_date(date)?;
-    let context = build_action_context(&app_state.repository, day).map_err(|e| e.to_string())?;
+    let context = build_action_context_for_query(&app_state.repository, day, &question)
+        .map_err(|e| e.to_string())?;
     let system = system_prompt(&settings.locale);
     let user = user_prompt(&question, day, &context);
 
@@ -180,7 +184,8 @@ pub async fn llm_chat(
     let day = parse_date(date)?;
     let mut user = message.clone();
     if include_activity {
-        let context = build_action_context(&app_state.repository, day).map_err(|e| e.to_string())?;
+        let context = build_action_context_for_query(&app_state.repository, day, &message)
+            .map_err(|e| e.to_string())?;
         user = format!(
             "날짜: {}\n\n활동 기록:\n{}\n\n사용자: {}",
             day.format("%Y-%m-%d"),
@@ -193,11 +198,7 @@ pub async fn llm_chat(
         );
     }
 
-    chat(
-        &settings,
-        companion_system_prompt(&settings.locale),
-        &user,
-    )
-    .await
-    .map_err(|e| e.to_string())
+    chat(&settings, companion_system_prompt(&settings.locale), &user)
+        .await
+        .map_err(|e| e.to_string())
 }

@@ -35,6 +35,9 @@ pub struct AppSettings {
     /// UI theme (`dark` or `light`)
     #[serde(default = "default_theme")]
     pub theme: String,
+    /// Reduce live polling and hide heavy realtime visuals.
+    #[serde(default)]
+    pub performance_mode: bool,
     /// 초기 설정 마법사 완료 여부
     #[serde(default)]
     pub setup_completed: bool,
@@ -138,6 +141,7 @@ impl Default for AppSettings {
             store_screenshot_preview: false,
             locale: default_locale(),
             theme: default_theme(),
+            performance_mode: false,
             setup_completed: false,
             first_run_completed: false,
             llm_provider: default_llm_provider(),

@@ -6,7 +6,7 @@ use crate::analytics::{
     DailyStatistics, FullTimelineItem, IdleAnalysis, ProductivityAnalysis, WeeklyReport,
 };
 use crate::database::models::ApplicationUsage;
-use crate::events::EventType;
+use crate::events::{ActivityEvent, EventType};
 use crate::os::{self, PermissionStatus};
 use crate::settings_commands::{filter_permissions_by_settings, SettingsState};
 use crate::state::AppState;
@@ -21,11 +21,117 @@ pub struct HourlyActivityItem {
     pub activity: f64,
 }
 
+#[derive(Debug, Serialize)]
+pub struct ActionDateSummary {
+    pub date: String,
+    pub total: i64,
+    pub copy: i64,
+    pub paste: i64,
+    pub screenshot: i64,
+    pub top_location: Option<String>,
+    pub latest_time: Option<String>,
+    pub latest_app: Option<String>,
+}
+
+fn summarize_action_events_for_date(
+    date: String,
+    events: impl IntoIterator<Item = ActivityEvent>,
+) -> Option<ActionDateSummary> {
+    let mut copy = 0;
+    let mut paste = 0;
+    let mut screenshot = 0;
+    let mut latest_time = None;
+    let mut latest_app = None;
+    let mut locations = std::collections::HashMap::<String, i64>::new();
+
+    for event in events.into_iter().filter(|e| {
+        matches!(
+            e.event_type,
+            EventType::Copy | EventType::Paste | EventType::Screenshot
+        )
+    }) {
+        match event.event_type {
+            EventType::Copy => copy += 1,
+            EventType::Paste => paste += 1,
+            EventType::Screenshot => screenshot += 1,
+            _ => {}
+        }
+
+        let app = event
+            .application
+            .clone()
+            .unwrap_or_else(|| "Unknown".into());
+        let location = if let Some(window) = event.window_title.as_deref().filter(|w| !w.is_empty())
+        {
+            format!("{app} · {window}")
+        } else {
+            app.clone()
+        };
+        *locations.entry(location).or_insert(0) += 1;
+        latest_time = Some(
+            event
+                .created_at
+                .with_timezone(&Local)
+                .format("%H:%M:%S")
+                .to_string(),
+        );
+        latest_app = Some(app);
+    }
+
+    let total = copy + paste + screenshot;
+    if total == 0 {
+        return None;
+    }
+
+    let top_location = locations
+        .into_iter()
+        .max_by(|a, b| a.1.cmp(&b.1).then_with(|| b.0.cmp(&a.0)))
+        .map(|(location, _)| location);
+
+    Some(ActionDateSummary {
+        date,
+        total,
+        copy,
+        paste,
+        screenshot,
+        top_location,
+        latest_time,
+        latest_app,
+    })
+}
+
 fn parse_date(date: Option<String>) -> Result<NaiveDate, String> {
     match date {
         Some(d) => NaiveDate::parse_from_str(&d, "%Y-%m-%d").map_err(|e| e.to_string()),
         None => Ok(Local::now().date_naive()),
     }
+}
+
+#[tauri::command]
+pub fn get_action_date_summaries(
+    state: State<AppState>,
+    limit: Option<usize>,
+) -> Result<Vec<ActionDateSummary>, String> {
+    let limit = limit.unwrap_or(14).clamp(1, 60);
+    let dates = state
+        .repository
+        .get_available_dates()
+        .map_err(|e| e.to_string())?;
+
+    let mut summaries = Vec::new();
+    for (date_str, _) in dates.into_iter().take(limit) {
+        let date = NaiveDate::parse_from_str(&date_str, "%Y-%m-%d").map_err(|e| e.to_string())?;
+        let events = state
+            .repository
+            .get_events_for_date(date)
+            .map_err(|e| e.to_string())?;
+
+        if let Some(summary) = summarize_action_events_for_date(date_str, events) {
+            summaries.push(summary);
+        }
+    }
+
+    Ok(summaries)
 }
 
 #[tauri::command]
@@ -310,4 +416,64 @@ pub fn check_permissions_cli() -> Result<PermissionStatus, String> {
 #[tauri::command]
 pub fn request_permissions_cli() -> Result<PermissionStatus, String> {
     Ok(os::request_permissions())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use chrono::{Local, TimeZone, Utc};
+
+    fn event(event_type: EventType, hour: u32, app: &str, window: Option<&str>) -> ActivityEvent {
+        ActivityEvent {
+            id: None,
+            event_type,
+            created_at: Utc.with_ymd_and_hms(2026, 6, 19, hour, 30, 0).unwrap(),
+            duration: None,
+            application: Some(app.into()),
+            window_title: window.map(str::to_string),
+            metadata: None,
+        }
+    }
+
+    #[test]
+    fn summarizes_action_counts_and_top_location() {
+        let summary = summarize_action_events_for_date(
+            "2026-06-19".into(),
+            vec![
+                event(EventType::Copy, 9, "Arc", Some("Docs")),
+                event(EventType::Paste, 10, "Arc", Some("Docs")),
+                event(EventType::Screenshot, 11, "Finder", Some("Desktop")),
+                event(EventType::WindowFocus, 12, "Cursor", Some("Editor")),
+            ],
+        )
+        .expect("action summary");
+
+        assert_eq!(summary.date, "2026-06-19");
+        assert_eq!(summary.total, 3);
+        assert_eq!(summary.copy, 1);
+        assert_eq!(summary.paste, 1);
+        assert_eq!(summary.screenshot, 1);
+        assert_eq!(summary.top_location.as_deref(), Some("Arc · Docs"));
+        let expected_latest_time = Utc
+            .with_ymd_and_hms(2026, 6, 19, 11, 30, 0)
+            .unwrap()
+            .with_timezone(&Local)
+            .format("%H:%M:%S")
+            .to_string();
+        assert_eq!(
+            summary.latest_time.as_deref(),
+            Some(expected_latest_time.as_str())
+        );
+        assert_eq!(summary.latest_app.as_deref(), Some("Finder"));
+    }
+
+    #[test]
+    fn ignores_dates_without_action_events() {
+        let summary = summarize_action_events_for_date(
+            "2026-06-19".into(),
+            vec![event(EventType::WindowFocus, 9, "Cursor", Some("Editor"))],
+        );
+
+        assert!(summary.is_none());
+    }
 }
