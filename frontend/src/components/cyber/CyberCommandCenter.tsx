@@ -1,13 +1,4 @@
 import { useCallback, useMemo, useState } from "react";
-import {
-  Area,
-  AreaChart,
-  CartesianGrid,
-  ResponsiveContainer,
-  Tooltip,
-  XAxis,
-  YAxis,
-} from "recharts";
 import type {
   ActionHourlyPoint,
   ActivityItem,
@@ -15,23 +6,17 @@ import type {
   DailyStatistics,
   FullTimelineItem,
   HourlyActivity,
-  PortInfo,
   ProductivityAnalysis,
 } from "../../api/client";
 import {
   formatDuration,
-  formatMemoryGb,
-  formatMemoryUsage,
-  killPortProcess,
   llmChat,
 } from "../../api/client";
 import { ActionChart } from "../ActionChart";
 import { CyberEventStream } from "./CyberEventStream";
 import { ActivityGraph } from "../ActivityGraph";
-import { useTheme } from "../../theme";
 import { CyberMetric } from "./CyberMetric";
 import { CyberPanel } from "./CyberPanel";
-import { HISTORY_LEN, LIGHT_HISTORY_LEN, useSystemMetrics } from "./useSystemMetrics";
 import type { LlmChatResult } from "../../api/client";
 
 interface Props {
@@ -63,57 +48,18 @@ export function CyberCommandCenter({
   dateLabel,
   viewingToday,
 }: Props) {
-  const { chart } = useTheme();
-  const [paused, setPaused] = useState(false);
-  const [portFilter, setPortFilter] = useState("");
-  const [killingPid, setKillingPid] = useState<number | null>(null);
   const [aiLoading, setAiLoading] = useState(false);
   const [aiError, setAiError] = useState<string | null>(null);
   const [aiResult, setAiResult] = useState<LlmChatResult | null>(null);
-  const { snapshot, history, error, reload } = useSystemMetrics(connected, paused, performanceMode);
   const behaviorProfile = useMemo(
     () => buildBehaviorProfile(stats, applications, productivity, actionHourly, hourly, fullTimeline),
     [stats, applications, productivity, actionHourly, hourly, fullTimeline],
   );
+  const topApplications = useMemo(() => applications.slice(0, 6), [applications]);
+  const maxAppDuration = Math.max(...topApplications.map((app) => app.duration), 1);
 
   const totalMinutes = 24 * 60;
   const activePct = Math.min((stats.active / totalMinutes) * 100, 100);
-
-  const filteredPorts = useMemo(() => {
-    if (!snapshot) return [];
-    const q = portFilter.trim().toLowerCase();
-    let ports = snapshot.ports;
-    if (q) {
-      ports = ports.filter(
-        (p) =>
-          String(p.port).includes(q) ||
-          p.process?.toLowerCase().includes(q) ||
-          p.address.toLowerCase().includes(q),
-      );
-    }
-    return [...ports].sort((a, b) => a.port - b.port).slice(0, 12);
-  }, [snapshot, portFilter]);
-
-  const handleKillPort = useCallback(
-    async (port: PortInfo) => {
-      if (!port.pid || port.is_tracedesk) return;
-      const label = port.process ?? `PID ${port.pid}`;
-      const ok = window.confirm(
-        `포트 ${port.port} (${port.address})를 사용 중인 「${label}」(PID ${port.pid}) 프로세스를 종료할까요?`,
-      );
-      if (!ok) return;
-      setKillingPid(port.pid);
-      try {
-        await killPortProcess(port.pid);
-        await reload();
-      } catch {
-        /* handled by parent */
-      } finally {
-        setKillingPid(null);
-      }
-    },
-    [reload],
-  );
 
   const now = new Date().toLocaleTimeString("ko-KR", {
     hour: "2-digit",
@@ -164,42 +110,19 @@ export function CyberCommandCenter({
               {performanceMode ? "LIGHT" : "FULL"}
             </span>
           </div>
-          {snapshot && (
-            <>
-              <div className="cyber-hud-bar-item">
-                <span className="cyber-hud-bar-label">CPU</span>
-                <span className="cyber-hud-bar-value" style={{ color: "var(--cyber-cyan)" }}>
-                  {snapshot.cpu_usage_percent.toFixed(1)}%
-                </span>
-              </div>
-              <div className="cyber-hud-bar-item">
-                <span className="cyber-hud-bar-label">MEM</span>
-                <span className="cyber-hud-bar-value" style={{ color: "var(--cyber-green)" }}>
-                  {snapshot.memory.used_percent.toFixed(1)}%
-                </span>
-              </div>
-              <div className="cyber-hud-bar-item">
-                <span className="cyber-hud-bar-label">PORTS</span>
-                <span className="cyber-hud-bar-value">{snapshot.port_count}</span>
-              </div>
-            </>
-          )}
-          <div className="ml-auto">
-            <button
-              type="button"
-              onClick={() => setPaused((p) => !p)}
-              className="cyber-btn"
-            >
-              {paused ? "▶ RESUME" : "⏸ PAUSE"}
-            </button>
+          <div className="cyber-hud-bar-item">
+            <span className="cyber-hud-bar-label">ACTIONS</span>
+            <span className="cyber-hud-bar-value" style={{ color: "var(--cyber-amber)" }}>
+              {stats.copy + stats.paste + stats.screenshot}
+            </span>
+          </div>
+          <div className="cyber-hud-bar-item">
+            <span className="cyber-hud-bar-label">APPS</span>
+            <span className="cyber-hud-bar-value" style={{ color: "var(--cyber-green)" }}>
+              {applications.length}
+            </span>
           </div>
         </div>
-
-        {error && (
-          <div className="cyber-panel cyber-panel-glow-magenta px-4 py-2 text-sm font-mono text-danger-text">
-            ⚠ {error}
-          </div>
-        )}
 
         {/* AI Behavior Profile */}
         <div className="grid grid-cols-1 xl:grid-cols-12 gap-3">
@@ -356,125 +279,75 @@ export function CyberCommandCenter({
               compact
             />
           )}
-          {snapshot && (
-            <CyberMetric
-              label="SYS CPU"
-              value={`${snapshot.cpu_usage_percent.toFixed(1)}%`}
-              percent={snapshot.cpu_usage_percent}
-              color="var(--cyber-cyan)"
-              compact
-            />
-          )}
+          <CyberMetric
+            label="APPS"
+            value={`${applications.length}`}
+            subValue={stats.top_application ?? "NO CONTEXT"}
+            color="var(--cyber-cyan)"
+            compact
+          />
         </div>
 
         {/* Main Grid */}
         <div className="grid grid-cols-1 xl:grid-cols-12 gap-3" style={{ minHeight: "calc(100vh - 280px)" }}>
-          {/* System Chart */}
           <div className="xl:col-span-8">
             <CyberPanel
-              title="SYS.TELEMETRY"
-              subtitle={`${performanceMode ? LIGHT_HISTORY_LEN * 10 : HISTORY_LEN * 3}s ROLLING`}
+              title="ACTIVITY.SIGNAL"
+              subtitle={performanceMode ? "FOCUSED" : "HOURLY"}
               glow="cyan"
               className="h-full"
             >
-              {snapshot ? (
-                <ResponsiveContainer width="100%" height={160}>
-                  <AreaChart data={history}>
-                    <defs>
-                      <linearGradient id="cyberCpuGrad" x1="0" y1="0" x2="0" y2="1">
-                        <stop offset="5%" stopColor="var(--cyber-cyan)" stopOpacity={0.4} />
-                        <stop offset="95%" stopColor="var(--cyber-cyan)" stopOpacity={0} />
-                      </linearGradient>
-                      <linearGradient id="cyberMemGrad" x1="0" y1="0" x2="0" y2="1">
-                        <stop offset="5%" stopColor="var(--cyber-green)" stopOpacity={0.4} />
-                        <stop offset="95%" stopColor="var(--cyber-green)" stopOpacity={0} />
-                      </linearGradient>
-                    </defs>
-                    <CartesianGrid strokeDasharray="2 4" stroke={chart.grid} opacity={0.5} />
-                    <XAxis dataKey="t" stroke={chart.axis} fontSize={9} interval="preserveStartEnd" tick={{ fill: chart.axis }} />
-                    <YAxis stroke={chart.axis} fontSize={9} domain={[0, 100]} tickFormatter={(v) => `${v}%`} tick={{ fill: chart.axis }} />
-                    <Tooltip
-                      contentStyle={{
-                        background: "var(--cyber-panel-bg)",
-                        border: "1px solid var(--cyber-panel-border)",
-                        borderRadius: 0,
-                        fontFamily: "var(--cyber-font-mono)",
-                        fontSize: 11,
-                        color: chart.tooltipText,
-                      }}
-                      formatter={(v, name) => [`${Number(v).toFixed(1)}%`, name === "cpu" ? "CPU" : "MEM"]}
-                    />
-                    <Area type="monotone" dataKey="cpu" stroke="var(--cyber-cyan)" fill="url(#cyberCpuGrad)" strokeWidth={1.5} name="cpu" />
-                    <Area type="monotone" dataKey="mem" stroke="var(--cyber-green)" fill="url(#cyberMemGrad)" strokeWidth={1.5} name="mem" />
-                  </AreaChart>
-                </ResponsiveContainer>
-              ) : (
-                <div className="h-40 flex items-center justify-center text-text-muted font-mono text-xs">
-                  AWAITING TELEMETRY...
-                </div>
-              )}
+              <ActivityGraph data={hourly} />
             </CyberPanel>
           </div>
 
-          {/* TraceDesk Process + Top App */}
           <div className="xl:col-span-4 flex flex-col gap-3">
-            <CyberPanel title="TRACEDESK.PROC" glow="green" className="flex-1">
-              {snapshot?.tracedesk ? (
-                <div className="space-y-2 font-mono text-sm">
-                  <div className="flex justify-between">
-                    <span className="text-text-muted text-xs">CPU</span>
-                    <span style={{ color: "var(--cyber-cyan)" }}>
-                      {snapshot.tracedesk.cpu_percent.toFixed(1)}%
-                    </span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span className="text-text-muted text-xs">MEM</span>
-                    <span style={{ color: "var(--cyber-green)" }}>
-                      {formatMemoryGb(snapshot.tracedesk.memory_mb)}
-                    </span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span className="text-text-muted text-xs">PID</span>
-                    <span>{snapshot.tracedesk.pid}</span>
-                  </div>
-                </div>
-              ) : (
-                <p className="text-text-muted font-mono text-xs">NO SIGNAL</p>
-              )}
+            <CyberPanel title="CONTEXT.PRIMARY" glow="green" className="flex-1">
               {stats.top_application && (
-                <div className="mt-3 pt-3 border-t border-border">
-                  <p className="cyber-metric-label">TOP APP</p>
-                  <p className="font-mono text-sm truncate" style={{ color: "var(--cyber-amber)" }}>
+                <div>
+                  <p className="cyber-metric-label">DOMINANT APP</p>
+                  <p className="font-mono text-base truncate" style={{ color: "var(--cyber-amber)" }}>
                     {stats.top_application}
                   </p>
                 </div>
               )}
+              <div className="mt-3 space-y-2">
+                {topApplications.length === 0 ? (
+                  <p className="text-text-muted font-mono text-xs">NO APP CONTEXT</p>
+                ) : (
+                  topApplications.slice(0, 4).map((app) => (
+                    <div key={app.application} className="ai-vector-row">
+                      <div className="flex items-center justify-between gap-3">
+                        <span className="truncate">{app.application}</span>
+                        <strong>{formatDuration(Math.round(app.duration / 60))}</strong>
+                      </div>
+                      <div className="ai-vector-track">
+                        <div
+                          style={{
+                            width: `${Math.max((app.duration / maxAppDuration) * 100, 4)}%`,
+                            background: "var(--cyber-green)",
+                            boxShadow: "0 0 12px var(--cyber-green)",
+                          }}
+                        />
+                      </div>
+                    </div>
+                  ))
+                )}
+              </div>
             </CyberPanel>
 
-            <CyberPanel title="MEMORY" glow="green">
-              {snapshot ? (
-                <CyberMetric
-                  label="USAGE"
-                  value={formatMemoryUsage(snapshot.memory.used_mb, snapshot.memory.total_mb)}
-                  subValue={`${snapshot.memory.used_percent.toFixed(1)}%`}
-                  percent={snapshot.memory.used_percent}
-                  color="var(--cyber-green)"
-                />
-              ) : (
-                <p className="text-text-muted font-mono text-xs">—</p>
-              )}
+            <CyberPanel title="ACTION.RATIO" glow="magenta">
+              <div className="grid grid-cols-3 gap-2">
+                <CyberMetric label="COPY" value={`${stats.copy}`} color="var(--cyber-green)" compact />
+                <CyberMetric label="PASTE" value={`${stats.paste}`} color="var(--cyber-amber)" compact />
+                <CyberMetric label="CAPTURE" value={`${stats.screenshot}`} color="var(--cyber-magenta)" compact />
+              </div>
             </CyberPanel>
           </div>
 
           {!performanceMode && (
             <>
-              {/* Activity Charts */}
-              <div className="xl:col-span-6">
-                <CyberPanel title="ACTIVITY.SIGNAL" subtitle="HOURLY" glow="cyan" className="h-[220px]">
-                  <ActivityGraph data={hourly} />
-                </CyberPanel>
-              </div>
-              <div className="xl:col-span-6">
+              <div className="xl:col-span-12">
                 <CyberPanel title="ACTION.SIGNAL" subtitle="HOURLY" glow="magenta" className="h-[220px]">
                   <ActionChart data={actionHourly} variant="grouped" height={180} />
                 </CyberPanel>
@@ -491,61 +364,33 @@ export function CyberCommandCenter({
             </CyberPanel>
           </div>
 
-          {/* Ports */}
-          <div className={performanceMode ? "xl:col-span-7" : "xl:col-span-5"}>
-            <CyberPanel
-              title="NET.PORTS"
-              subtitle={`${filteredPorts.length} ACTIVE`}
-              glow="cyan"
-              headerRight={
-                <input
-                  type="text"
-                  placeholder="FILTER"
-                  value={portFilter}
-                  onChange={(e) => setPortFilter(e.target.value)}
-                  className="cyber-input w-24"
-                />
-              }
-            >
+          <div className={performanceMode ? "xl:col-span-7" : "xl:col-span-8"}>
+            <CyberPanel title="APP.CONTEXT" subtitle={`${topApplications.length} TRACKED`} glow="cyan">
               <div className="cyber-scroll max-h-48">
                 <table className="cyber-table">
                   <thead>
                     <tr>
-                      <th>PORT</th>
-                      <th>PROC</th>
-                      <th>PID</th>
-                      <th />
+                      <th>APP</th>
+                      <th>TIME</th>
+                      <th>SIGNAL</th>
                     </tr>
                   </thead>
                   <tbody>
-                    {filteredPorts.length === 0 ? (
+                    {topApplications.length === 0 ? (
                       <tr>
-                        <td colSpan={4} className="text-center text-text-muted py-4">
-                          NO PORTS
+                        <td colSpan={3} className="text-center text-text-muted py-4">
+                          NO CONTEXT
                         </td>
                       </tr>
                     ) : (
-                      filteredPorts.map((p) => (
-                        <tr
-                          key={`${p.protocol}-${p.address}-${p.port}-${p.pid}`}
-                          className={p.is_tracedesk ? "opacity-80" : ""}
-                        >
-                          <td style={{ color: p.is_tracedesk ? "var(--cyber-green)" : undefined }}>
-                            {p.port}
+                      topApplications.map((app) => (
+                        <tr key={app.application}>
+                          <td className="truncate max-w-[180px]" title={app.application}>
+                            {app.application}
                           </td>
-                          <td className="truncate max-w-[100px]">{p.process ?? "—"}</td>
-                          <td>{p.pid ?? "—"}</td>
-                          <td>
-                            {p.pid && !p.is_tracedesk && (
-                              <button
-                                type="button"
-                                disabled={killingPid === p.pid}
-                                onClick={() => handleKillPort(p)}
-                                className="cyber-btn cyber-btn-danger !px-2 !py-0.5"
-                              >
-                                {killingPid === p.pid ? "…" : "KILL"}
-                              </button>
-                            )}
+                          <td>{formatDuration(Math.round(app.duration / 60))}</td>
+                          <td style={{ color: "var(--cyber-cyan)" }}>
+                            {Math.round((app.duration / maxAppDuration) * 100)}%
                           </td>
                         </tr>
                       ))
@@ -556,35 +401,6 @@ export function CyberCommandCenter({
             </CyberPanel>
           </div>
 
-          {/* Top Processes */}
-          <div className={performanceMode ? "xl:col-span-5" : "xl:col-span-3"}>
-            <CyberPanel title="PROC.TOP" subtitle="CPU" glow="green">
-              <div className="cyber-scroll max-h-48">
-                <table className="cyber-table">
-                  <thead>
-                    <tr>
-                      <th>NAME</th>
-                      <th>CPU</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {(snapshot?.top_processes ?? []).slice(0, 8).map((p) => (
-                      <tr key={p.pid}>
-                        <td className="truncate max-w-[90px]" title={p.name}>
-                          {p.name}
-                        </td>
-                        <td style={{ color: "var(--cyber-cyan)" }}>
-                          {p.cpu_percent.toFixed(1)}%
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            </CyberPanel>
-          </div>
-
-          {/* Activity Feed */}
           {!performanceMode && <div className="xl:col-span-4">
             <CyberPanel
               title="EVENT.STREAM"

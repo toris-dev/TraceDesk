@@ -52,11 +52,11 @@ const ActionsView = lazy(() =>
 const AnalyticsView = lazy(() =>
   import("./views/AnalyticsView").then((m) => ({ default: m.AnalyticsView })),
 );
+const AIChatView = lazy(() =>
+  import("./views/AIChatView").then((m) => ({ default: m.AIChatView })),
+);
 const CyberCommandCenter = lazy(() =>
   import("./components/cyber/CyberCommandCenter").then((m) => ({ default: m.CyberCommandCenter })),
-);
-const SystemMonitor = lazy(() =>
-  import("./components/SystemMonitor").then((m) => ({ default: m.SystemMonitor })),
 );
 
 const MAX_JOURNAL_EVENTS = 300;
@@ -237,6 +237,10 @@ function AppContent({
     let unlisten: (() => void) | undefined;
     subscribeMenuEvents({
       onNavigate: (p) => {
+        if (p === "system") {
+          setPage("monitor");
+          return;
+        }
         if (isDashboardPage(p)) setPage(p);
       },
       onRefresh: () => {
@@ -354,9 +358,9 @@ function AppContent({
   );
 
   const mascotTab =
-    page === "monitor" || page === "system"
+    page === "monitor"
       ? "system"
-      : page === "settings"
+      : page === "settings" || page === "ai"
         ? "settings"
         : "activity";
 
@@ -615,28 +619,35 @@ function AppContent({
           </div>
         )}
 
-        {page === "system" && (
-          <Suspense fallback={<MascotScene mood="loading" title={t("app.loadingSystem")} size="md" />}>
-            <SystemMonitor connected={connected && !error} />
+        {page === "settings" && <SettingsPanel onSettingsChange={onSettingsChange} />}
+
+        {page === "ai" && (
+          <Suspense fallback={<MascotScene mood="loading" title={t("nav.ai")} size="md" />}>
+            <AIChatView
+              selectedDate={selectedDate}
+              availableDates={availableDates}
+              onDateChange={setSelectedDate}
+              onOpenSettings={() => setPage("settings")}
+            />
           </Suspense>
         )}
-
-        {page === "settings" && <SettingsPanel onSettingsChange={onSettingsChange} />}
 
         {isActivityPage(page) && renderActivityContent()}
       </DashboardLayout>
 
-      <MascotAssistant
-        loading={loading && isActivityPage(page)}
-        error={error}
-        connected={connected}
-        hasActivity={!!hasActivity}
-        productivityScore={productivity?.score}
-        activeTab={mascotTab}
-        setupCompleted={appSettings.setup_completed}
-        selectedDate={selectedDate}
-        onOpenSettings={() => setPage("settings")}
-      />
+      {page !== "ai" && (
+        <MascotAssistant
+          loading={loading && isActivityPage(page)}
+          error={error}
+          connected={connected}
+          hasActivity={!!hasActivity}
+          productivityScore={productivity?.score}
+          activeTab={mascotTab}
+          setupCompleted={appSettings.setup_completed}
+          selectedDate={selectedDate}
+          onOpenSettings={() => setPage("settings")}
+        />
+      )}
     </>
   );
 }

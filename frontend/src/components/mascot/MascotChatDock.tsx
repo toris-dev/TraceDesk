@@ -7,6 +7,7 @@ import { MASCOT_ICON_SRC, pickMessage } from "./mascotTypes";
 import { TortoiseMascot } from "./TortoiseMascot";
 
 const SIZE_KEY = "tracedesk-mascot-chat-size";
+const MESSAGES_KEY = "tracedesk-mascot-chat-messages:v1";
 const DEFAULT_W = 340;
 const DEFAULT_H = 420;
 const MIN_W = 280;
@@ -47,12 +48,27 @@ function clamp(n: number, min: number, max: number) {
   return Math.min(max, Math.max(min, n));
 }
 
+function loadMessages(fallbackText: string): ChatMessage[] {
+  try {
+    const raw = localStorage.getItem(MESSAGES_KEY);
+    if (!raw) return [{ role: "assistant", text: fallbackText }];
+    const parsed = JSON.parse(raw) as ChatMessage[];
+    const messages = Array.isArray(parsed)
+      ? parsed.filter((m) => m?.role && typeof m.text === "string")
+      : [];
+    return messages.length > 0 ? messages : [{ role: "assistant", text: fallbackText }];
+  } catch {
+    return [{ role: "assistant", text: fallbackText }];
+  }
+}
+
 export function MascotChatDock({ mood, greeting, selectedDate, onOpenSettings }: Props) {
   const { t } = useI18n();
+  const greetingText = greeting ?? pickMessage(mood);
   const [dismissed, setDismissed] = useState(false);
   const [size, setSize] = useState(loadSize);
   const [config, setConfig] = useState<LlmConfigView | null>(null);
-  const [messages, setMessages] = useState<ChatMessage[]>([]);
+  const [messages, setMessages] = useState<ChatMessage[]>(() => loadMessages(greetingText));
   const [input, setInput] = useState("");
   const [includeActivity, setIncludeActivity] = useState(true);
   const [loading, setLoading] = useState(false);
@@ -62,8 +78,6 @@ export function MascotChatDock({ mood, greeting, selectedDate, onOpenSettings }:
     null,
   );
 
-  const greetingText = greeting ?? pickMessage(mood);
-
   useEffect(() => {
     getLlmConfig()
       .then(setConfig)
@@ -71,8 +85,8 @@ export function MascotChatDock({ mood, greeting, selectedDate, onOpenSettings }:
   }, []);
 
   useEffect(() => {
-    setMessages([{ role: "assistant", text: greetingText }]);
-  }, [greetingText]);
+    localStorage.setItem(MESSAGES_KEY, JSON.stringify(messages.slice(-80)));
+  }, [messages]);
 
   useEffect(() => {
     scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: "smooth" });
@@ -198,7 +212,7 @@ export function MascotChatDock({ mood, greeting, selectedDate, onOpenSettings }:
         {messages.slice(1).map((m, i) => (
           <div
             key={`${m.role}-${i}`}
-            className={`text-xs leading-relaxed rounded-lg px-2.5 py-1.5 max-w-[92%] ${
+            className={`text-xs leading-relaxed rounded-lg px-2.5 py-1.5 max-w-[92%] mascot-chat-message ${
               m.role === "user"
                 ? "ml-auto bg-accent/15 text-text border border-accent/25"
                 : "mr-auto bg-surface text-text-muted border border-border/60"

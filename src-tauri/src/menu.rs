@@ -22,7 +22,6 @@ pub const NAV_OVERVIEW: &str = "nav-overview";
 pub const NAV_ACTIONS: &str = "nav-actions";
 pub const NAV_TIMELINE: &str = "nav-timeline";
 pub const NAV_ANALYTICS: &str = "nav-analytics";
-pub const NAV_SYSTEM: &str = "nav-system";
 pub const NAV_SETTINGS: &str = "nav-settings";
 
 pub const EVENT_NAVIGATE: &str = "menu-navigate";
@@ -88,7 +87,6 @@ struct MenuStrings {
     actions: &'static str,
     timeline: &'static str,
     analytics: &'static str,
-    system: &'static str,
     window: &'static str,
     minimize: &'static str,
     zoom: &'static str,
@@ -125,7 +123,6 @@ fn menu_strings(locale: &str) -> MenuStrings {
             actions: "Actions",
             timeline: "Timeline",
             analytics: "Analytics",
-            system: "System",
             window: "Window",
             minimize: "Minimize",
             zoom: "Zoom",
@@ -160,7 +157,6 @@ fn menu_strings(locale: &str) -> MenuStrings {
             actions: "행동 기록",
             timeline: "타임라인",
             analytics: "분석",
-            system: "시스템",
             window: "윈도우",
             minimize: "최소화",
             zoom: "확대/축소",
@@ -318,16 +314,12 @@ fn build_view_submenu(app: &AppHandle, s: &MenuStrings) -> tauri::Result<Submenu
     let actions = MenuItem::with_id(app, NAV_ACTIONS, s.actions, true, Some("CmdOrCtrl+3"))?;
     let timeline = MenuItem::with_id(app, NAV_TIMELINE, s.timeline, true, Some("CmdOrCtrl+4"))?;
     let analytics = MenuItem::with_id(app, NAV_ANALYTICS, s.analytics, true, Some("CmdOrCtrl+5"))?;
-    let sep2 = PredefinedMenuItem::separator(app)?;
-    let system = MenuItem::with_id(app, NAV_SYSTEM, s.system, true, None::<&str>)?;
 
     Submenu::with_items(
         app,
         s.view,
         true,
-        &[
-            &go_today, &sep1, &journal, &overview, &actions, &timeline, &analytics, &sep2, &system,
-        ],
+        &[&go_today, &sep1, &journal, &overview, &actions, &timeline, &analytics],
     )
 }
 
@@ -395,8 +387,7 @@ pub fn handle_menu_event(app: &AppHandle, id: &str) {
             let _ = app.emit(EVENT_CHECK_UPDATE, ());
         }
 
-        NAV_JOURNAL | NAV_OVERVIEW | NAV_ACTIONS | NAV_TIMELINE | NAV_ANALYTICS | NAV_SYSTEM
-        | NAV_SETTINGS => {
+        NAV_JOURNAL | NAV_OVERVIEW | NAV_ACTIONS | NAV_TIMELINE | NAV_ANALYTICS | NAV_SETTINGS => {
             let page = id.strip_prefix("nav-").unwrap_or(id);
             show_main_window(app);
             let _ = app.emit(EVENT_NAVIGATE, page);

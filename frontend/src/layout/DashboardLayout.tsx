@@ -10,7 +10,7 @@ export type DashboardPage =
   | "actions"
   | "timeline"
   | "analytics"
-  | "system"
+  | "ai"
   | "settings";
 
 const DASHBOARD_PAGES: DashboardPage[] = [
@@ -20,7 +20,7 @@ const DASHBOARD_PAGES: DashboardPage[] = [
   "actions",
   "timeline",
   "analytics",
-  "system",
+  "ai",
   "settings",
 ];
 
@@ -35,7 +35,7 @@ const NAV_IDS: { id: DashboardPage; labelKey: string; descKey: string; icon: str
   { id: "actions", labelKey: "nav.actions", descKey: "nav.actionsDesc", icon: "⚡" },
   { id: "timeline", labelKey: "nav.timeline", descKey: "nav.timelineDesc", icon: "▬" },
   { id: "analytics", labelKey: "nav.analytics", descKey: "nav.analyticsDesc", icon: "◔" },
-  { id: "system", labelKey: "nav.system", descKey: "nav.systemDesc", icon: "⬡" },
+  { id: "ai", labelKey: "nav.ai", descKey: "nav.aiDesc", icon: "◇" },
   { id: "settings", labelKey: "nav.settings", descKey: "nav.settingsDesc", icon: "⚙" },
 ];
 
@@ -88,6 +88,7 @@ export function DashboardLayout({
                 key={item.id}
                 type="button"
                 onClick={() => onPageChange(item.id)}
+                aria-current={active ? "page" : undefined}
                 className={`w-full text-left rounded-xl px-3 py-3 transition-all border ${
                   active
                     ? "cyber-nav-active text-text"
@@ -182,6 +183,7 @@ export function DashboardLayout({
                 key={item.id}
                 type="button"
                 onClick={() => onPageChange(item.id)}
+                aria-current={page === item.id ? "page" : undefined}
                 className={`shrink-0 rounded-full px-4 py-2 text-sm font-display tracking-wide border transition-colors ${
                   page === item.id
                     ? "bg-[var(--cyber-cyan)] text-[var(--td-accent-foreground)] border-[var(--cyber-cyan)]"
