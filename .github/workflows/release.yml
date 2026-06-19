@@ -53,12 +53,13 @@ jobs:
           tagName: ${{ github.ref_name }}
           releaseName: TraceDesk ${{ github.ref_name }}
           releaseBody: |
-            ## v0.1.10
+            ## v0.1.11
 
             ### Product Design QA
             - Tauri IPC 없이도 로컬 웹 프리뷰에서 주요 화면을 볼 수 있는 dev-only mock 데이터 추가
             - 커맨드 센터, AI 채팅, 좁은 데스크탑 뷰포트 기준 스크린샷 audit 산출물 작성
             - audit에서 발견된 커맨드 센터 마스코트의 시스템 모니터 문구를 행동 패턴 안내 문구로 수정
+            - CPU/메모리 진단처럼 보이던 레거시 시스템 네비게이션 문구를 상태 허브 중심으로 정리
 
             ### 검증 안정화
             - 프론트엔드 lint 규칙을 Tauri 앱 데이터 로딩/모듈 export 패턴에 맞게 조정
