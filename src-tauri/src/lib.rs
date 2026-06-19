@@ -176,9 +176,13 @@ pub fn run() {
             devpulse::get_devpulse_secrets_status,
             devpulse::update_devpulse_secrets,
             devpulse::get_devpulse_status,
+            devpulse::get_devpulse_infra_status,
             devpulse::run_devpulse_now,
+            devpulse::start_devpulse_infra,
+            devpulse::stop_devpulse_infra,
             devpulse::start_devpulse_daemon,
             devpulse::stop_devpulse_daemon,
+            devpulse::pick_devpulse_root_dir,
         ])
         .build(tauri::generate_context!())
         .expect("failed to build TraceDesk application")

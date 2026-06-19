@@ -67,6 +67,8 @@ pub struct AppSettings {
     pub devpulse_cron_expr: String,
     #[serde(default = "default_devpulse_feeds")]
     pub devpulse_feeds: Vec<String>,
+    #[serde(default)]
+    pub devpulse_topic_filters: Vec<String>,
     #[serde(default = "default_devpulse_batch_size")]
     pub devpulse_batch_size: u32,
     #[serde(default = "default_devpulse_collect_limit")]
@@ -207,6 +209,7 @@ impl Default for AppSettings {
             devpulse_cron_enabled: false,
             devpulse_cron_expr: default_devpulse_cron_expr(),
             devpulse_feeds: default_devpulse_feeds(),
+            devpulse_topic_filters: Vec::new(),
             devpulse_batch_size: default_devpulse_batch_size(),
             devpulse_collect_limit: default_devpulse_collect_limit(),
             devpulse_idle_poll_sec: default_devpulse_idle_poll_sec(),
