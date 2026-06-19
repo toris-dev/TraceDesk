@@ -55,6 +55,9 @@ const AnalyticsView = lazy(() =>
 const AIChatView = lazy(() =>
   import("./views/AIChatView").then((m) => ({ default: m.AIChatView })),
 );
+const DevPulseView = lazy(() =>
+  import("./views/DevPulseView").then((m) => ({ default: m.DevPulseView })),
+);
 const CyberCommandCenter = lazy(() =>
   import("./components/cyber/CyberCommandCenter").then((m) => ({ default: m.CyberCommandCenter })),
 );
@@ -555,6 +558,13 @@ function AppContent({
               applications={applications}
               idleAnalysis={idleAnalysis}
             />
+          </Suspense>
+        );
+
+      case "pulse":
+        return (
+          <Suspense fallback={<MascotScene mood="loading" title={t("nav.pulse")} size="md" />}>
+            <DevPulseView />
           </Suspense>
         );
 

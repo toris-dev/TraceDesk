@@ -11,6 +11,7 @@ export type DashboardPage =
   | "timeline"
   | "analytics"
   | "ai"
+  | "pulse"
   | "settings";
 
 const DASHBOARD_PAGES: DashboardPage[] = [
@@ -21,6 +22,7 @@ const DASHBOARD_PAGES: DashboardPage[] = [
   "timeline",
   "analytics",
   "ai",
+  "pulse",
   "settings",
 ];
 
@@ -36,6 +38,7 @@ const NAV_IDS: { id: DashboardPage; labelKey: string; descKey: string; icon: str
   { id: "timeline", labelKey: "nav.timeline", descKey: "nav.timelineDesc", icon: "▬" },
   { id: "analytics", labelKey: "nav.analytics", descKey: "nav.analyticsDesc", icon: "◔" },
   { id: "ai", labelKey: "nav.ai", descKey: "nav.aiDesc", icon: "◇" },
+  { id: "pulse", labelKey: "nav.pulse", descKey: "nav.pulseDesc", icon: "▣" },
   { id: "settings", labelKey: "nav.settings", descKey: "nav.settingsDesc", icon: "⚙" },
 ];
 
@@ -138,21 +141,21 @@ export function DashboardLayout({
 
       <div className="flex-1 flex flex-col min-w-0 min-h-0">
         <header className="shrink-0 z-20 border-b cyber-header cyber-topbar backdrop-blur-md">
-          <div className="px-4 md:px-8 py-4 flex flex-wrap items-center justify-between gap-4 cyber-topbar-inner">
+          <div className="px-4 py-4 md:px-8 flex items-center justify-between gap-4 md:flex-nowrap cyber-topbar-inner">
             <div className="md:hidden">
               <AppLogo subtitle={subtitle} />
             </div>
-            <div className="hidden md:block">
-              <p className="cyber-window-kicker">TRACEDESK / LOCAL ACTIVITY OS</p>
-              <h2 className="text-xl font-display font-semibold tracking-wide text-[var(--cyber-cyan)]">
+            <div className="hidden min-w-0 flex-1 md:block">
+              <p className="cyber-window-kicker whitespace-nowrap">TRACEDESK / LOCAL ACTIVITY OS</p>
+              <h2 className="truncate whitespace-nowrap text-xl font-display font-semibold tracking-wide text-[var(--cyber-cyan)]">
                 {current ? t(current.labelKey) : ""}
               </h2>
-              <p className="text-sm text-text-muted">
+              <p className="truncate whitespace-nowrap text-sm text-text-muted">
                 {current ? t(current.descKey) : ""}
               </p>
             </div>
 
-            <div className="relative flex flex-wrap items-center gap-2 ml-auto">
+            <div className="relative ml-auto flex min-w-0 flex-nowrap items-center gap-2 overflow-x-auto scrollbar-none">
               {toolbar}
               {themeToggle}
               {onRefresh && (

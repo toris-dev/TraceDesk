@@ -5,6 +5,8 @@ mod archive;
 mod collector;
 mod commands;
 mod database;
+mod devpulse;
+mod devpulse_secrets;
 mod events;
 mod export;
 mod llm;
@@ -17,6 +19,7 @@ pub mod system;
 mod tray;
 
 use crate::collector::input_bridge::{sync_input_monitoring, InputChannel};
+use devpulse::DevPulseState;
 use settings::load_settings;
 use settings_commands::{apply_autostart_preference, maybe_run_auto_archive, SettingsState};
 use state::AppState;
@@ -67,6 +70,8 @@ pub fn run() {
 
             let settings_state = SettingsState(Arc::new(std::sync::RwLock::new(settings.clone())));
             app.manage(settings_state.clone());
+            let devpulse_state = DevPulseState::default();
+            app.manage(devpulse_state.clone());
 
             let (input_tx, input_rx) = crossbeam_channel::unbounded();
             app.manage(InputChannel(input_tx.clone()));
@@ -101,12 +106,15 @@ pub fn run() {
                 }
             });
 
+            let settings_state_for_archive = settings_state.clone();
             tauri::async_runtime::spawn_blocking(move || {
                 std::thread::sleep(std::time::Duration::from_secs(5));
-                if let Ok(mut s) = settings_state.0.write() {
+                if let Ok(mut s) = settings_state_for_archive.0.write() {
                     maybe_run_auto_archive(&mut s);
                 }
             });
+
+            devpulse::spawn_scheduler(app.handle().clone(), settings_state.clone(), devpulse_state);
 
             app.manage(app_state);
 
@@ -163,6 +171,14 @@ pub fn run() {
             llm::commands::llm_test_connection,
             llm::commands::llm_ask_actions,
             llm::commands::llm_chat,
+            devpulse::get_devpulse_config,
+            devpulse::update_devpulse_settings,
+            devpulse::get_devpulse_secrets_status,
+            devpulse::update_devpulse_secrets,
+            devpulse::get_devpulse_status,
+            devpulse::run_devpulse_now,
+            devpulse::start_devpulse_daemon,
+            devpulse::stop_devpulse_daemon,
         ])
         .build(tauri::generate_context!())
         .expect("failed to build TraceDesk application")

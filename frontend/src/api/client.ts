@@ -212,6 +212,17 @@ function previewSettings(): AppSettings {
     llm_model: "llama3.1",
     ollama_base_url: "http://localhost:11434",
     api_base_url: "",
+    devpulse_root_dir: "../devPulse",
+    devpulse_cron_enabled: false,
+    devpulse_cron_expr: "0 9 * * *",
+    devpulse_feeds: ["all", "new", "ask", "show", "top"],
+    devpulse_batch_size: 5,
+    devpulse_collect_limit: 0,
+    devpulse_idle_poll_sec: 90,
+    devpulse_backlog_pause_sec: 0,
+    devpulse_bundle_size: 6,
+    devpulse_sns_mode: "file",
+    devpulse_mastodon_instance: "",
   };
 }
 
@@ -427,12 +438,139 @@ async function mockInvoke<T>(cmd: string, args?: Record<string, unknown>): Promi
       total_archive_mb: 0,
       last_archive_at: null,
     } satisfies DbStats,
+    get_devpulse_config: {
+      root_dir: "/Users/toris/projects/devPulse",
+      cron_enabled: false,
+      cron_expr: "0 9 * * *",
+      feeds: ["all", "new", "ask", "show", "top"],
+      batch_size: 5,
+      collect_limit: 0,
+      idle_poll_sec: 90,
+      backlog_pause_sec: 0,
+      bundle_size: 6,
+      sns_mode: "file",
+      mastodon_instance: "",
+      has_mastodon_token: false,
+    } satisfies DevPulseConfigView,
+    get_devpulse_status: {
+      config: {
+        root_dir: "/Users/toris/projects/devPulse",
+        cron_enabled: false,
+        cron_expr: "0 9 * * *",
+        feeds: ["all", "new", "ask", "show", "top"],
+        batch_size: 5,
+        collect_limit: 0,
+        idle_poll_sec: 90,
+        backlog_pause_sec: 0,
+        bundle_size: 6,
+        sns_mode: "file",
+        mastodon_instance: "",
+        has_mastodon_token: false,
+      },
+      runtime: {
+        daemon_running: false,
+        daemon_pid: null,
+        run_in_flight: false,
+        last_run_at: "2026-06-19T21:50:00+09:00",
+        last_error: null,
+      },
+      payload: {
+        progress: {
+          daemon_status: "대기",
+          run_number: 12,
+          phase: "유휴",
+          step: "신규 글 없음 · 번들 대기 없음",
+          current_post_id: null,
+          current_title: null,
+          collected_this_run: 0,
+          queue_size: 0,
+          processed_this_run: 0,
+          failed_this_run: 0,
+          total_published: 18,
+          total_collected: 3,
+          total_failed: 1,
+          updated_at: "2026-06-19T21:50:00+09:00",
+          recent_logs: ["cycle #12 idle processed=0", "dashboard: http://127.0.0.1:8188"],
+        },
+        db: {
+          counts: { published: 18, card_generated: 4, collected: 3, failed: 1 },
+          bundle_pending: "4/6",
+          bundle_total: 3,
+          recent_bundles: [],
+        },
+        bundle: {
+          current: 4,
+          target: 6,
+          percent: 66.7,
+          ready: false,
+          slots: [
+            { index: 1, filled: true, post_id: "post-1", title: "Apple MLX updates", url: "/Users/toris/projects/devPulse/output/cards/post-1.jpg" },
+            { index: 2, filled: true, post_id: "post-2", title: "OpenAI desktop agents", url: "/Users/toris/projects/devPulse/output/cards/post-2.jpg" },
+            { index: 3, filled: true, post_id: "post-3", title: "Rust async runtime", url: "/Users/toris/projects/devPulse/output/cards/post-3.jpg" },
+            { index: 4, filled: true, post_id: "post-4", title: "Design systems at scale", url: "/Users/toris/projects/devPulse/output/cards/post-4.jpg" },
+            { index: 5, filled: false, post_id: "", title: "", url: null },
+            { index: 6, filled: false, post_id: "", title: "", url: null },
+          ],
+          cards: [],
+        },
+        artifacts: {
+          counts: { cards: 24, bundles: 3, bundles_raw: 3 },
+          cards: [
+            {
+              post_id: "post-1",
+              title: "Apple MLX updates",
+              url: "/Users/toris/projects/devPulse/output/cards/post-1.jpg",
+              size_kb: 244.1,
+              created_at: "2026-06-19T21:40:00+09:00",
+              kind: "standalone",
+            },
+          ],
+          bundles: [
+            {
+              bundle_id: "bundle-20260619-01",
+              post_ids: ["post-1", "post-2", "post-3", "post-4", "post-5", "post-6"],
+              post_count: 6,
+              platform: "file",
+              published_at: "2026-06-19T21:10:00+09:00",
+              created_at: "2026-06-19T21:10:00+09:00",
+              caption: "AI infra weekly digest",
+              caption_url: null,
+              json_url: "/Users/toris/projects/devPulse/output/sns/bundle-20260619-01.json",
+              video_url: "/Users/toris/projects/devPulse/output/bundles/bundle-20260619-01/bundle-20260619-01.mp4",
+              card_count: 6,
+              size_kb: 1822.2,
+            },
+          ],
+        },
+        logs: {
+          tail: ["[21:49] idle", "[21:50] waiting next cycle"],
+          log_file: "output/daemon.log",
+        },
+        generated_at: "2026-06-19T21:50:00+09:00",
+      },
+    } satisfies DevPulseStatusView,
   };
 
   if (cmd === "update_settings") return { ...previewSettings(), ...definedSettings(args) } as T;
   if (cmd === "complete_setup") return { settings: previewSettings(), permissions: okPermissions } as T;
   if (cmd === "export_activity") return { saved: true, path: "/tmp/tracedesk-preview.csv", row_count: 63 } as T;
   if (cmd === "set_llm_api_key" || cmd === "update_llm_settings") return responses.get_llm_config as T;
+  if (cmd === "update_devpulse_settings") {
+    return { ...(responses.get_devpulse_config as Record<string, unknown>), ...(args ?? {}) } as T;
+  }
+  if (cmd === "get_devpulse_secrets_status" || cmd === "update_devpulse_secrets") {
+    return { has_mastodon_token: Boolean(args?.mastodonAccessToken) } as T;
+  }
+  if (cmd === "run_devpulse_now") return { mode: args?.mode ?? "run", ok: true } as T;
+  if (cmd === "start_devpulse_daemon" || cmd === "stop_devpulse_daemon") {
+    return {
+      daemon_running: cmd === "start_devpulse_daemon",
+      daemon_pid: cmd === "start_devpulse_daemon" ? 4242 : null,
+      run_in_flight: false,
+      last_run_at: "2026-06-19T21:50:00+09:00",
+      last_error: null,
+    } as T;
+  }
   if (cmd === "run_archive_now") {
     return {
       archived_months: [],
@@ -654,6 +792,17 @@ export interface AppSettings {
   llm_model: string;
   ollama_base_url: string;
   api_base_url: string;
+  devpulse_root_dir: string;
+  devpulse_cron_enabled: boolean;
+  devpulse_cron_expr: string;
+  devpulse_feeds: string[];
+  devpulse_batch_size: number;
+  devpulse_collect_limit: number;
+  devpulse_idle_poll_sec: number;
+  devpulse_backlog_pause_sec: number;
+  devpulse_bundle_size: number;
+  devpulse_sns_mode: string;
+  devpulse_mastodon_instance: string;
 }
 
 export interface ArchiveInfo {
@@ -735,6 +884,190 @@ export function getDbStats() {
 
 export function runArchiveNow() {
   return invokeCmd<ArchiveResult>("run_archive_now");
+}
+
+export interface DevPulseConfigView {
+  root_dir: string;
+  cron_enabled: boolean;
+  cron_expr: string;
+  feeds: string[];
+  batch_size: number;
+  collect_limit: number;
+  idle_poll_sec: number;
+  backlog_pause_sec: number;
+  bundle_size: number;
+  sns_mode: string;
+  mastodon_instance: string;
+  has_mastodon_token: boolean;
+}
+
+export interface DevPulseSecretsStatusView {
+  has_mastodon_token: boolean;
+}
+
+export interface DevPulseRuntimeView {
+  daemon_running: boolean;
+  daemon_pid: number | null;
+  run_in_flight: boolean;
+  last_run_at: string | null;
+  last_error: string | null;
+}
+
+export interface DevPulseCardArtifact {
+  post_id: string;
+  title: string;
+  url: string;
+  size_kb: number;
+  created_at: string;
+  kind: string;
+}
+
+export interface DevPulseBundleArtifact {
+  bundle_id: string;
+  post_ids: string[];
+  post_count: number;
+  platform: string;
+  published_at: string;
+  created_at: string;
+  caption: string;
+  caption_url: string | null;
+  json_url: string | null;
+  video_url: string | null;
+  card_count: number;
+  size_kb: number;
+  duplicate_count?: number;
+  duplicate_bundle_ids?: string[];
+}
+
+export interface DevPulseDbBundle {
+  id: string;
+  post_ids: string[];
+  video_key: string | null;
+  created_at: string;
+}
+
+export interface DevPulseStatusView {
+  config: DevPulseConfigView;
+  runtime: DevPulseRuntimeView;
+  payload: {
+    progress?: {
+      daemon_status?: string;
+      run_number?: number;
+      phase?: string;
+      step?: string;
+      current_post_id?: string | null;
+      current_title?: string | null;
+      collected_this_run?: number;
+      queue_size?: number;
+      processed_this_run?: number;
+      failed_this_run?: number;
+      total_published?: number;
+      total_collected?: number;
+      total_failed?: number;
+      updated_at?: string;
+      recent_logs?: string[];
+    };
+    db?: {
+      counts?: Record<string, number | string>;
+      bundle_pending?: string;
+      bundle_total?: number;
+      recent_bundles?: DevPulseDbBundle[];
+    };
+    bundle?: {
+      current?: number;
+      target?: number;
+      percent?: number;
+      ready?: boolean;
+      cards?: Array<Record<string, unknown>>;
+      slots?: Array<{
+        index: number;
+        filled: boolean;
+        post_id: string;
+        title: string;
+        url: string | null;
+      }>;
+    };
+    artifacts?: {
+      counts?: {
+        cards?: number;
+        bundles?: number;
+        bundles_raw?: number;
+      };
+      cards?: DevPulseCardArtifact[];
+      bundles?: DevPulseBundleArtifact[];
+    };
+    logs?: {
+      tail?: string[];
+      log_file?: string;
+    };
+    generated_at?: string;
+  };
+}
+
+export function getDevPulseConfig() {
+  return invokeCmd<DevPulseConfigView>("get_devpulse_config");
+}
+
+export function updateDevPulseSettings(opts: {
+  rootDir?: string;
+  cronEnabled?: boolean;
+  cronExpr?: string;
+  feeds?: string[];
+  batchSize?: number;
+  collectLimit?: number;
+  idlePollSec?: number;
+  backlogPauseSec?: number;
+  bundleSize?: number;
+  snsMode?: string;
+  mastodonInstance?: string;
+}) {
+  return invokeCmd<DevPulseConfigView>("update_devpulse_settings", {
+    rootDir: opts.rootDir ?? null,
+    cronEnabled: opts.cronEnabled ?? null,
+    cronExpr: opts.cronExpr ?? null,
+    feeds: opts.feeds ?? null,
+    batchSize: opts.batchSize ?? null,
+    collectLimit: opts.collectLimit ?? null,
+    idlePollSec: opts.idlePollSec ?? null,
+    backlogPauseSec: opts.backlogPauseSec ?? null,
+    bundleSize: opts.bundleSize ?? null,
+    snsMode: opts.snsMode ?? null,
+    mastodonInstance: opts.mastodonInstance ?? null,
+  });
+}
+
+export function getDevPulseSecretsStatus() {
+  return invokeCmd<DevPulseSecretsStatusView>("get_devpulse_secrets_status");
+}
+
+export function updateDevPulseSecrets(opts: { mastodonAccessToken?: string | null }) {
+  return invokeCmd<DevPulseSecretsStatusView>("update_devpulse_secrets", {
+    mastodonAccessToken: opts.mastodonAccessToken ?? null,
+  });
+}
+
+export function getDevPulseStatus() {
+  return invokeCmd<DevPulseStatusView>("get_devpulse_status");
+}
+
+export function runDevPulseNow(mode: "run" | "collect" | "bundle" | "cleanup" = "run") {
+  return invokeCmd<Record<string, unknown>>("run_devpulse_now", { mode });
+}
+
+export function startDevPulseDaemon() {
+  return invokeCmd<DevPulseRuntimeView>("start_devpulse_daemon");
+}
+
+export function stopDevPulseDaemon() {
+  return invokeCmd<DevPulseRuntimeView>("stop_devpulse_daemon");
+}
+
+export function toAssetUrl(path: string | null | undefined) {
+  if (!path) return null;
+  if (path.startsWith("http://") || path.startsWith("https://") || path.startsWith("asset:")) {
+    return path;
+  }
+  return convertFileSrc(path);
 }
 
 export interface AvailableDate {
