@@ -7,7 +7,7 @@
     "build": "npm run build --prefix frontend",
     "test": "cargo test --manifest-path src-tauri/Cargo.toml && npm run build --prefix frontend",
     "tauri": "tauri",
-    "tauri:dev": "tauri dev",
+    "tauri:dev": "tauri dev -c src-tauri/tauri.dev.conf.json",
     "tauri:build": "tauri build",
     "tauri:build:open": "tauri build && node scripts/open-installer.mjs"
   },

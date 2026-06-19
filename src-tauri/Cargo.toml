@@ -4,6 +4,7 @@ version = "0.1.11"
 description = "Personal Computer Activity Intelligence System"
 authors = ["TraceDesk"]
 edition = "2021"
+default-run = "tracedesk"
 
 [lib]
 name = "tracedesk_lib"
