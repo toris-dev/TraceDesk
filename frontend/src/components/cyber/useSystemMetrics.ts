@@ -4,7 +4,9 @@ import { getSystemSnapshot } from "../../api/client";
 
 /** CPU/memory only — matches backend light refresh cadence. */
 const POLL_MS = 3_000;
+const LIGHT_POLL_MS = 10_000;
 export const HISTORY_LEN = 36;
+export const LIGHT_HISTORY_LEN = 12;
 
 export interface MetricHistoryPoint {
   t: string;
@@ -20,13 +22,16 @@ function formatTickLabel() {
   });
 }
 
-export function useSystemMetrics(connected: boolean, paused = false) {
+export function useSystemMetrics(connected: boolean, paused = false, performanceMode = false) {
   const [snapshot, setSnapshot] = useState<SystemSnapshot | null>(null);
   const [history, setHistory] = useState<MetricHistoryPoint[]>([]);
   const [error, setError] = useState<string | null>(null);
   const inflight = useRef(false);
   const pausedRef = useRef(paused);
-  pausedRef.current = paused;
+
+  useEffect(() => {
+    pausedRef.current = paused;
+  }, [paused]);
 
   const load = useCallback(async () => {
     if (pausedRef.current || inflight.current) return;
@@ -38,7 +43,7 @@ export function useSystemMetrics(connected: boolean, paused = false) {
       const label = formatTickLabel();
       setHistory((prev) =>
         [...prev, { t: label, cpu: data.cpu_usage_percent, mem: data.memory.used_percent }].slice(
-          -HISTORY_LEN,
+          -(performanceMode ? LIGHT_HISTORY_LEN : HISTORY_LEN),
         ),
       );
     } catch {
@@ -46,7 +51,7 @@ export function useSystemMetrics(connected: boolean, paused = false) {
     } finally {
       inflight.current = false;
     }
-  }, []);
+  }, [performanceMode]);
 
   useEffect(() => {
     if (!connected) return;
@@ -55,7 +60,7 @@ export function useSystemMetrics(connected: boolean, paused = false) {
 
     const start = () => {
       load();
-      intervalId = setInterval(load, POLL_MS);
+      intervalId = setInterval(load, performanceMode ? LIGHT_POLL_MS : POLL_MS);
     };
 
     const stop = () => {
@@ -83,7 +88,7 @@ export function useSystemMetrics(connected: boolean, paused = false) {
       stop();
       document.removeEventListener("visibilitychange", onVisibility);
     };
-  }, [connected, load]);
+  }, [connected, load, performanceMode]);
 
   return { snapshot, history, error, reload: load };
 }

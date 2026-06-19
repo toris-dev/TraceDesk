@@ -1,5 +1,11 @@
 import { useCallback, useEffect, useState } from "react";
-import { getActionEvents, type ActivityItem, type DailyStatistics } from "../api/client";
+import {
+  getActionDateSummaries,
+  getActionEvents,
+  type ActionDateSummary,
+  type ActivityItem,
+  type DailyStatistics,
+} from "../api/client";
 import { ActionGraphExplorer } from "../components/action-graph/ActionGraphExplorer";
 import { useI18n } from "../i18n";
 import { CYBER } from "../theme/cyberTokens";
@@ -8,6 +14,7 @@ import { actionTotals } from "../utils/actionAnalytics";
 interface Props {
   stats: DailyStatistics;
   selectedDate: string;
+  onDateChange: (date: string) => void;
   dateLabel: string;
   viewingToday: boolean;
   liveEvents: ActivityItem[];
@@ -16,12 +23,14 @@ interface Props {
 export function ActionsView({
   stats,
   selectedDate,
+  onDateChange,
   dateLabel,
   viewingToday,
   liveEvents,
 }: Props) {
   const { t } = useI18n();
   const [events, setEvents] = useState<ActivityItem[]>([]);
+  const [dateSummaries, setDateSummaries] = useState<ActionDateSummary[]>([]);
   const [loading, setLoading] = useState(true);
   const totals = actionTotals(stats);
 
@@ -40,6 +49,12 @@ export function ActionsView({
   useEffect(() => {
     load();
   }, [load]);
+
+  useEffect(() => {
+    getActionDateSummaries(14)
+      .then(setDateSummaries)
+      .catch(() => setDateSummaries([]));
+  }, [selectedDate]);
 
   // Merge live events when viewing today
   const displayEvents = viewingToday
@@ -74,8 +89,63 @@ export function ActionsView({
         </div>
       </div>
 
+      <ActionDateStrip
+        summaries={dateSummaries}
+        selectedDate={selectedDate}
+        onPickDate={onDateChange}
+      />
+
       <ActionGraphExplorer events={displayEvents} loading={loading} dateLabel={dateLabel} />
     </div>
+  );
+}
+
+function ActionDateStrip({
+  summaries,
+  selectedDate,
+  onPickDate,
+}: {
+  summaries: ActionDateSummary[];
+  selectedDate: string;
+  onPickDate: (date: string) => void;
+}) {
+  const { t } = useI18n();
+
+  return (
+    <section className="action-date-strip">
+      <div className="action-date-strip-head">
+        <span>{t("actions.recentDateSummary")}</span>
+        <small>{t("actions.recentDateSummaryHint")}</small>
+      </div>
+      {summaries.length === 0 ? (
+        <div className="action-date-empty">
+          <span>NO ACTION DATES</span>
+          <small>{t("actions.empty")}</small>
+        </div>
+      ) : null}
+      <div className="action-date-strip-scroll">
+        {summaries.map((summary) => {
+          const active = summary.date === selectedDate;
+          return (
+            <button
+              key={summary.date}
+              type="button"
+              onClick={() => onPickDate(summary.date)}
+              className={`action-date-chip ${active ? "action-date-chip-active" : ""}`}
+            >
+              <span className="action-date-chip-date">{summary.date}</span>
+              <strong>{summary.total}</strong>
+              <span className="action-date-chip-location" title={summary.top_location ?? undefined}>
+                {summary.top_location ?? t("actions.noLocation")}
+              </span>
+              <span className="action-date-chip-meta">
+                C {summary.copy} · P {summary.paste} · S {summary.screenshot}
+              </span>
+            </button>
+          );
+        })}
+      </div>
+    </section>
   );
 }
 

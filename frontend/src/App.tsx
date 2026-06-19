@@ -414,6 +414,9 @@ function AppContent({
             <CyberCommandCenter
               connected={connected && !error}
               stats={stats}
+              applications={applications}
+              selectedDate={selectedDate}
+              performanceMode={appSettings.performance_mode}
               productivity={productivity}
               actionHourly={actionHourly}
               hourly={hourly}
@@ -461,6 +464,7 @@ function AppContent({
             <ActionsView
               stats={stats}
               selectedDate={selectedDate}
+              onDateChange={setSelectedDate}
               dateLabel={dateLabel}
               viewingToday={viewingToday}
               liveEvents={actionEvents}

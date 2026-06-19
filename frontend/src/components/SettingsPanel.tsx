@@ -112,6 +112,15 @@ export function SettingsPanel({ onSettingsChange }: Props) {
     }
   };
 
+  const handlePerformanceMode = async (enabled: boolean) => {
+    setSaving(true);
+    try {
+      applySettings(await updateSettings({ performanceMode: enabled }));
+    } finally {
+      setSaving(false);
+    }
+  };
+
   const handleRequestPermissions = async () => {
     setSaving(true);
     try {
@@ -215,6 +224,16 @@ export function SettingsPanel({ onSettingsChange }: Props) {
       <LlmSettingsSection />
 
       <UpdatePanel />
+
+      <section className="rounded-xl border border-border bg-surface-elevated p-5 space-y-3">
+        <PermissionToggle
+          label={t("settings.performanceMode")}
+          description={t("settings.performanceModeDesc")}
+          checked={settings.performance_mode}
+          disabled={saving}
+          onChange={handlePerformanceMode}
+        />
+      </section>
 
       <section className="rounded-xl border border-border bg-surface-elevated p-5 space-y-3">
         <div className="flex items-center justify-between">

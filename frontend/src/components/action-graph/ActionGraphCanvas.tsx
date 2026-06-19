@@ -17,6 +17,9 @@ const KIND_ALPHA: Record<string, number> = {
   event: 0.78,
 };
 
+const MIN_ZOOM = 0.35;
+const MAX_ZOOM = 3;
+
 function linkEndpoints(
   link: ActionGraphLink,
   nodeById: Map<string, ActionGraphNode>,
@@ -111,6 +114,7 @@ export function ActionGraphCanvas({
     lastY: 0,
   });
   const [hoverId, setHoverId] = useState<string | null>(null);
+  const [zoomLabel, setZoomLabel] = useState(100);
 
   useEffect(() => {
     stateRef.current.nodes = graph.nodes.map((n) => ({ ...n }));
@@ -119,6 +123,7 @@ export function ActionGraphCanvas({
     stateRef.current.panX = 0;
     stateRef.current.panY = 0;
     stateRef.current.simAlpha = 1;
+    setZoomLabel(100);
   }, [graph]);
 
   const screenToWorld = useCallback(
@@ -150,6 +155,37 @@ export function ActionGraphCanvas({
     },
     [screenToWorld],
   );
+
+  const setZoomAt = useCallback(
+    (nextZoom: number, sx = width / 2, sy = height / 2) => {
+      const s = stateRef.current;
+      const before = {
+        x: (sx - width / 2 - s.panX) / s.zoom + width / 2,
+        y: (sy - height / 2 - s.panY) / s.zoom + height / 2,
+      };
+      s.zoom = Math.min(MAX_ZOOM, Math.max(MIN_ZOOM, nextZoom));
+      s.panX = sx - width / 2 - (before.x - width / 2) * s.zoom;
+      s.panY = sy - height / 2 - (before.y - height / 2) * s.zoom;
+      s.simAlpha = Math.min(1, s.simAlpha + 0.12);
+      setZoomLabel(Math.round(s.zoom * 100));
+    },
+    [width, height],
+  );
+
+  const resetView = useCallback(() => {
+    const s = stateRef.current;
+    s.zoom = 1;
+    s.panX = 0;
+    s.panY = 0;
+    s.simAlpha = 0.8;
+    setZoomLabel(100);
+  }, []);
+
+  const panBy = useCallback((dx: number, dy: number) => {
+    const s = stateRef.current;
+    s.panX += dx;
+    s.panY += dy;
+  }, []);
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -258,9 +294,11 @@ export function ActionGraphCanvas({
   const onWheel = (e: React.WheelEvent) => {
     e.preventDefault();
     const s = stateRef.current;
-    const delta = e.deltaY > 0 ? 0.92 : 1.08;
-    s.zoom = Math.min(3, Math.max(0.35, s.zoom * delta));
-    s.simAlpha = Math.min(1, s.simAlpha + 0.15);
+    const rect = e.currentTarget.getBoundingClientRect();
+    const sx = e.clientX - rect.left;
+    const sy = e.clientY - rect.top;
+    const factor = Math.exp(-e.deltaY * 0.0012);
+    setZoomAt(s.zoom * factor, sx, sy);
   };
 
   const onPointerDown = (e: React.PointerEvent) => {
@@ -275,7 +313,7 @@ export function ActionGraphCanvas({
       s.panning = true;
       onSelectNode(null);
     }
-    (e.target as HTMLCanvasElement).setPointerCapture(e.pointerId);
+    (e.currentTarget as HTMLCanvasElement).setPointerCapture(e.pointerId);
   };
 
   const onPointerMove = (e: React.PointerEvent) => {
@@ -303,20 +341,100 @@ export function ActionGraphCanvas({
   const onPointerUp = (e: React.PointerEvent) => {
     stateRef.current.draggingNode = null;
     stateRef.current.panning = false;
-    (e.target as HTMLCanvasElement).releasePointerCapture(e.pointerId);
+    if ((e.currentTarget as HTMLCanvasElement).hasPointerCapture(e.pointerId)) {
+      (e.currentTarget as HTMLCanvasElement).releasePointerCapture(e.pointerId);
+    }
+  };
+
+  const onKeyDown = (e: React.KeyboardEvent<HTMLCanvasElement>) => {
+    const key = e.key.toLowerCase();
+    if (key === "+" || key === "=") {
+      e.preventDefault();
+      setZoomAt(stateRef.current.zoom * 1.15);
+      return;
+    }
+    if (key === "-" || key === "_") {
+      e.preventDefault();
+      setZoomAt(stateRef.current.zoom / 1.15);
+      return;
+    }
+    if (key === "0" || key === "home") {
+      e.preventDefault();
+      resetView();
+      return;
+    }
+
+    const step = e.shiftKey ? 56 : 28;
+    if (key === "arrowleft") {
+      e.preventDefault();
+      panBy(step, 0);
+    } else if (key === "arrowright") {
+      e.preventDefault();
+      panBy(-step, 0);
+    } else if (key === "arrowup") {
+      e.preventDefault();
+      panBy(0, step);
+    } else if (key === "arrowdown") {
+      e.preventDefault();
+      panBy(0, -step);
+    }
   };
 
   return (
-    <canvas
-      ref={canvasRef}
-      width={width}
-      height={height}
-      className="w-full h-full cursor-grab active:cursor-grabbing rounded-lg"
-      onWheel={onWheel}
-      onPointerDown={onPointerDown}
-      onPointerMove={onPointerMove}
-      onPointerUp={onPointerUp}
-      onPointerLeave={() => setHoverId(null)}
-    />
+    <div className="graph-canvas-shell">
+      <canvas
+        ref={canvasRef}
+        width={width}
+        height={height}
+        tabIndex={0}
+        role="img"
+        aria-label="Copy, paste, and screenshot activity graph. Use plus or minus to zoom, arrow keys to pan, and zero to reset."
+        className="graph-canvas-surface cursor-grab active:cursor-grabbing"
+        style={{ touchAction: "none", overscrollBehavior: "contain" }}
+        onWheel={onWheel}
+        onKeyDown={onKeyDown}
+        onPointerDown={onPointerDown}
+        onPointerMove={onPointerMove}
+        onPointerUp={onPointerUp}
+        onPointerCancel={onPointerUp}
+        onPointerLeave={() => setHoverId(null)}
+      />
+      <div className="graph-zoom-hud" aria-label="Graph zoom controls">
+        <div className="graph-zoom-hud-label">ZOOM</div>
+        <button
+          type="button"
+          onClick={() => setZoomAt(stateRef.current.zoom / 1.2)}
+          className="graph-zoom-button"
+          aria-label="Zoom out"
+          title="Zoom out"
+        >
+          -
+        </button>
+        <button
+          type="button"
+          onClick={resetView}
+          className="graph-zoom-readout"
+          aria-label={`Reset graph view, current zoom ${zoomLabel}%`}
+          title="Reset view"
+        >
+          {zoomLabel}%
+        </button>
+        <button
+          type="button"
+          onClick={() => setZoomAt(stateRef.current.zoom * 1.2)}
+          className="graph-zoom-button"
+          aria-label="Zoom in"
+          title="Zoom in"
+        >
+          +
+        </button>
+      </div>
+      <div className="graph-canvas-hint">
+        <span>DRAG</span>
+        <span>WHEEL ZOOM</span>
+        <span>+ / - / 0</span>
+        <span>CLICK NODE</span>
+      </div>
+    </div>
   );
 }

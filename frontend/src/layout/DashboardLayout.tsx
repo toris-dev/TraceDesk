@@ -69,12 +69,16 @@ export function DashboardLayout({
 
   return (
     <div className="h-screen flex overflow-hidden cyber-shell">
-      <aside className="hidden md:flex w-60 shrink-0 h-full flex-col border-r cyber-sidebar">
-        <div className="p-5 border-b border-border">
+      <aside className="hidden md:flex w-60 shrink-0 h-full flex-col border-r cyber-sidebar cyber-app-rail">
+        <div className="p-5 border-b border-border cyber-brand-bay">
           <AppLogo subtitle={subtitle} />
+          <div className="cyber-brand-status">
+            <span className={connected ? "cyber-status-dot cyber-status-dot-live" : "cyber-status-dot cyber-status-dot-off"} />
+            <span>TRACE CORE</span>
+          </div>
         </div>
 
-        <nav className="flex-1 p-3 space-y-1 overflow-y-auto">
+        <nav className="flex-1 p-3 space-y-1 overflow-y-auto cyber-nav-stack">
           {NAV_IDS.map((item) => {
             const active = page === item.id;
             const badge =
@@ -121,7 +125,7 @@ export function DashboardLayout({
           })}
         </nav>
 
-        <div className="p-4 border-t border-border">
+        <div className="p-4 border-t border-border cyber-sidebar-footer">
           <div className="flex items-center gap-2 text-xs font-data text-text-muted">
             <span
               className={`w-2 h-2 rounded-full ${connected ? "bg-success animate-pulse shadow-[0_0_8px_var(--cyber-green)]" : "bg-danger"}`}
@@ -132,12 +136,13 @@ export function DashboardLayout({
       </aside>
 
       <div className="flex-1 flex flex-col min-w-0 min-h-0">
-        <header className="shrink-0 z-20 border-b cyber-header backdrop-blur-md">
-          <div className="px-4 md:px-8 py-4 flex flex-wrap items-center justify-between gap-4">
+        <header className="shrink-0 z-20 border-b cyber-header cyber-topbar backdrop-blur-md">
+          <div className="px-4 md:px-8 py-4 flex flex-wrap items-center justify-between gap-4 cyber-topbar-inner">
             <div className="md:hidden">
               <AppLogo subtitle={subtitle} />
             </div>
             <div className="hidden md:block">
+              <p className="cyber-window-kicker">TRACEDESK / LOCAL ACTIVITY OS</p>
               <h2 className="text-xl font-display font-semibold tracking-wide text-[var(--cyber-cyan)]">
                 {current ? t(current.labelKey) : ""}
               </h2>
@@ -189,9 +194,9 @@ export function DashboardLayout({
           </nav>
         </header>
 
-        <main className="flex-1 min-h-0 overflow-y-auto px-4 md:px-8 py-6">{children}</main>
+        <main className="flex-1 min-h-0 overflow-y-auto px-4 md:px-8 py-6 cyber-workspace">{children}</main>
 
-        <footer className="shrink-0 border-t border-border px-8 py-4 flex items-center justify-between text-xs font-data text-text-muted">
+        <footer className="shrink-0 border-t border-border px-8 py-4 flex items-center justify-between text-xs font-data text-text-muted cyber-footerbar">
           <div className="flex items-center gap-2">
             <img src={MASCOT_ICON_SRC} alt="" className="w-5 h-5 rounded-md object-cover opacity-60 mascot-float" />
             TraceDesk · {t("common.localStorage")}

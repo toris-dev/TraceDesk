@@ -121,6 +121,73 @@ function NodeInspector({ node }: { node: ActionGraphNode }) {
   );
 }
 
+function locationLabel(record: ActionRecord): string {
+  const app = record.app ?? "Unknown";
+  if (!record.window) return app;
+  return `${app} · ${record.window}`;
+}
+
+function ActionWhereSummary({
+  records,
+  onPick,
+}: {
+  records: ActionRecord[];
+  onPick: (type: ActionRecord["type"], query: string) => void;
+}) {
+  const { t } = useI18n();
+  const byType = useMemo(
+    () =>
+      (["COPY", "PASTE", "SCREENSHOT"] as const).map((type) => {
+        const typed = records.filter((record) => record.type === type);
+        const locations = new Map<string, number>();
+        for (const record of typed) {
+          locations.set(locationLabel(record), (locations.get(locationLabel(record)) ?? 0) + 1);
+        }
+        const topLocation =
+          [...locations.entries()].sort((a, b) => b[1] - a[1])[0]?.[0] ?? "—";
+        const latest = typed[typed.length - 1] ?? null;
+        const query = latest?.window ?? latest?.app ?? topLocation;
+        return {
+          type,
+          count: typed.length,
+          topLocation,
+          latest,
+          query,
+        };
+      }),
+    [records],
+  );
+
+  if (records.length === 0) return null;
+
+  return (
+    <section className="action-where-grid">
+      {byType.map((item) => (
+        <button
+          key={item.type}
+          type="button"
+          disabled={item.count === 0}
+          onClick={() => onPick(item.type, item.query)}
+          className="action-where-card"
+          title={item.count > 0 ? `${typeLabel(t, item.type)} · ${item.topLocation}` : undefined}
+        >
+          <div className="flex items-center justify-between gap-3">
+            <span className="td-label">{typeLabel(t, item.type)}</span>
+            <strong style={{ color: typeColor(item.type) }}>{item.count}</strong>
+          </div>
+          <p className="action-where-location" title={item.topLocation}>
+            {item.topLocation}
+          </p>
+          <div className="action-where-meta">
+            <span>{item.latest ? item.latest.time : "—"}</span>
+            <span>{item.latest?.app ?? "NO SIGNAL"}</span>
+          </div>
+        </button>
+      ))}
+    </section>
+  );
+}
+
 export function ActionGraphExplorer({ events, loading, dateLabel }: Props) {
   const { t } = useI18n();
   const [query, setQuery] = useState("");
@@ -143,6 +210,12 @@ export function ActionGraphExplorer({ events, loading, dateLabel }: Props) {
 
   const focusRecord = useCallback((rec: ActionRecord) => {
     setSelectedNodeId(`ev:${rec.id}`);
+  }, []);
+
+  const focusWhere = useCallback((type: ActionRecord["type"], nextQuery: string) => {
+    setFilter(type);
+    setQuery(nextQuery === "—" ? "" : nextQuery);
+    setSelectedNodeId(null);
   }, []);
 
   useEffect(() => {
@@ -194,6 +267,8 @@ export function ActionGraphExplorer({ events, loading, dateLabel }: Props) {
       <p className="text-xs text-text-muted font-data">
         {t("actions.graphHint", { date: dateLabel, count: records.length })}
       </p>
+
+      <ActionWhereSummary records={records} onPick={focusWhere} />
 
       <div className="grid lg:grid-cols-5 gap-4 min-h-[520px]">
         <div className="lg:col-span-3 td-panel p-2 flex flex-col min-h-[420px] lg:min-h-[520px]">
