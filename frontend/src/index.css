@@ -717,6 +717,55 @@ body {
   border-radius: 2px;
 }
 
+.update-available-banner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  border: 1px solid var(--cyber-green);
+  background:
+    linear-gradient(90deg, var(--cyber-green-dim), transparent 58%),
+    var(--cyber-panel-bg);
+  box-shadow:
+    0 0 18px var(--cyber-green-dim),
+    inset 0 0 18px rgb(170 255 0 / 0.08);
+  padding: 0.85rem 1rem;
+}
+.update-available-banner strong {
+  display: block;
+  color: var(--cyber-green);
+  font-family: var(--cyber-font-display);
+  font-size: 0.72rem;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+.update-available-banner p {
+  margin: 0.24rem 0 0;
+  color: var(--td-text-muted);
+  font-family: var(--cyber-font-mono);
+  font-size: 0.78rem;
+}
+.update-available-banner button {
+  flex: 0 0 auto;
+  border: 1px solid rgb(170 255 0 / 0.42);
+  background: rgb(170 255 0 / 0.1);
+  color: var(--cyber-green);
+  font-family: var(--cyber-font-mono);
+  font-size: 0.72rem;
+  font-weight: 700;
+  padding: 0.55rem 0.75rem;
+  transition:
+    border-color 0.18s ease,
+    box-shadow 0.18s ease,
+    background 0.18s ease;
+}
+.update-available-banner button:hover,
+.update-available-banner button:focus-visible {
+  border-color: var(--cyber-green);
+  background: var(--cyber-green-dim);
+  box-shadow: 0 0 14px var(--cyber-green-dim);
+}
+
 .graph-canvas-shell {
   position: relative;
   width: 100%;

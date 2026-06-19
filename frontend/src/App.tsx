@@ -41,6 +41,7 @@ import { I18nProvider, normalizeLocale, useI18n, type Locale } from "./i18n";
 import { ThemeProvider, normalizeTheme, type Theme } from "./theme";
 import { formatDate, isToday, todayISO } from "./utils/date";
 import { filterJournalEvents, isJournalEvent } from "./utils/activityFeed";
+import { checkForAppUpdate, type UpdateCheckResult } from "./updater";
 
 const OverviewView = lazy(() =>
   import("./views/OverviewView").then((m) => ({ default: m.OverviewView })),
@@ -144,6 +145,8 @@ function AppContent({
   const [connected, setConnected] = useState(true);
   const [timelineMode, setTimelineMode] = useState<"gantt" | "list">("gantt");
   const [exportNotice, setExportNotice] = useState<string | null>(null);
+  const [updateNotice, setUpdateNotice] = useState<UpdateCheckResult | null>(null);
+  const [checkingUpdate, setCheckingUpdate] = useState(false);
   const loadInflight = useRef(false);
 
   const loadAvailableDates = useCallback(async () => {
@@ -209,9 +212,26 @@ function AppContent({
     [t],
   );
 
+  const runUpdateCheck = useCallback(
+    async (manual = false) => {
+      setCheckingUpdate(true);
+      const next = await checkForAppUpdate();
+      setCheckingUpdate(false);
+      if (next.phase === "available" || manual) {
+        setUpdateNotice(next);
+      }
+    },
+    [],
+  );
+
   useEffect(() => {
     loadAvailableDates();
   }, [loadAvailableDates]);
+
+  useEffect(() => {
+    if (!appSettings.setup_completed) return;
+    void runUpdateCheck(false);
+  }, [appSettings.setup_completed, runUpdateCheck]);
 
   useEffect(() => {
     let unlisten: (() => void) | undefined;
@@ -228,6 +248,10 @@ function AppContent({
       },
       onExportDone: handleExportDone,
       onError: (message) => setExportNotice(message),
+      onCheckUpdate: () => {
+        setPage("settings");
+        void runUpdateCheck(true);
+      },
     })
       .then((fn) => {
         unlisten = fn;
@@ -237,7 +261,7 @@ function AppContent({
     return () => {
       unlisten?.();
     };
-  }, [page, selectedDate, loadData, handleExportDone]);
+  }, [page, selectedDate, loadData, handleExportDone, runUpdateCheck]);
 
   useEffect(() => {
     if (!isActivityPage(page)) return;
@@ -570,6 +594,24 @@ function AppContent({
         {exportNotice && (
           <div className="mb-4 rounded-lg border border-success/30 bg-success/10 px-4 py-2 text-sm text-success-text">
             {exportNotice}
+          </div>
+        )}
+
+        {updateNotice?.phase === "available" && (
+          <div className="mb-4 update-available-banner">
+            <div>
+              <strong>{t("updater.availableTitle")}</strong>
+              <p>{t("updater.available", { version: updateNotice.version ?? "" })}</p>
+            </div>
+            <button type="button" onClick={() => setPage("settings")}>
+              {t("updater.viewUpdate")}
+            </button>
+          </div>
+        )}
+
+        {checkingUpdate && page === "settings" && (
+          <div className="mb-4 rounded-lg border border-border bg-surface-elevated px-4 py-2 text-sm text-text-muted">
+            {t("updater.checking")}
           </div>
         )}
 
