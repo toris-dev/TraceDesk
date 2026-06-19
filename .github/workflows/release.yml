@@ -53,16 +53,21 @@ jobs:
           tagName: ${{ github.ref_name }}
           releaseName: TraceDesk ${{ github.ref_name }}
           releaseBody: |
-            ## v0.1.7
+            ## v0.1.8
 
-            ### AI / LLM
-            - **MLX-LM** 잘못된 모델 id 전송 시 Hugging Face 404 오류 수정
-            - 짧은 모델명 대신 서버에 로드된 기본 모델 사용 (모델 필드 선택 사항)
-            - 연결 시 `/v1/models`와 모델 id 자동 정리
+            ### AI / RAG
+            - 복사·붙여넣기·캡처 기록을 질문과 관련도 기준으로 선별해 답변 문맥에 반영
+            - 한국어/영어 행동 키워드와 앱, 창 제목, 클립보드 미리보기 검색 강화
+            - 커맨드 센터에서 사용자 행동 패턴을 AI 프로필 형태로 요약
 
-            ### 안정성
-            - CI `metrics_tests` — `lsof` 미지원 환경에서도 스냅샷 수집 통과
-            - 데이터 폴더 열기: `tauri-plugin-opener`로 전환 (shell deprecation 제거)
+            ### 행동 기록 UX
+            - 복사·붙여넣기·캡처가 발생한 날짜와 위치를 빠르게 확인하는 날짜 스트립 추가
+            - 행동 그래프 확대/축소를 마우스 위치 기준으로 개선하고 키보드 조작 추가
+            - 사이버틱한 사이드바, 상단 툴바, 그래프, AI 패널 디자인 적용
+
+            ### 업데이트 / 설정 안정성
+            - 앱 시작 및 메뉴 확인 시 새 버전이 있으면 업데이트 가능 배너 표시
+            - 기존 macOS 설정 파일에 새 필드가 없어도 설정 완료 상태가 초기화되지 않도록 수정
 
             ### 설치
             - macOS (Apple Silicon): `TraceDesk_*_aarch64.dmg` — Applications로 드래그
