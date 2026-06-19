@@ -1,7 +1,8 @@
-import type { ReactNode } from "react";
+import { type ReactNode } from "react";
 import { AppLogo } from "../components/AppLogo";
 import { MASCOT_ICON_SRC } from "../components/mascot";
 import { useI18n } from "../i18n";
+import { CyberSidebar, SIDEBAR_NAV_ITEMS } from "./CyberSidebar";
 
 export type DashboardPage =
   | "monitor"
@@ -30,18 +31,6 @@ export function isDashboardPage(value: string): value is DashboardPage {
   return DASHBOARD_PAGES.includes(value as DashboardPage);
 }
 
-const NAV_IDS: { id: DashboardPage; labelKey: string; descKey: string; icon: string }[] = [
-  { id: "monitor", labelKey: "nav.monitor", descKey: "nav.monitorDesc", icon: "◈" },
-  { id: "journal", labelKey: "nav.journal", descKey: "nav.journalDesc", icon: "◎" },
-  { id: "overview", labelKey: "nav.overview", descKey: "nav.overviewDesc", icon: "◫" },
-  { id: "actions", labelKey: "nav.actions", descKey: "nav.actionsDesc", icon: "⚡" },
-  { id: "timeline", labelKey: "nav.timeline", descKey: "nav.timelineDesc", icon: "▬" },
-  { id: "analytics", labelKey: "nav.analytics", descKey: "nav.analyticsDesc", icon: "◔" },
-  { id: "ai", labelKey: "nav.ai", descKey: "nav.aiDesc", icon: "◇" },
-  { id: "pulse", labelKey: "nav.pulse", descKey: "nav.pulseDesc", icon: "▣" },
-  { id: "settings", labelKey: "nav.settings", descKey: "nav.settingsDesc", icon: "⚙" },
-];
-
 interface Props {
   page: DashboardPage;
   onPageChange: (page: DashboardPage) => void;
@@ -68,76 +57,17 @@ export function DashboardLayout({
   children,
 }: Props) {
   const { t } = useI18n();
-  const current = NAV_IDS.find((n) => n.id === page);
+  const current = SIDEBAR_NAV_ITEMS.find((n) => n.id === page);
 
   return (
     <div className="h-screen flex overflow-hidden cyber-shell">
-      <aside className="hidden md:flex w-60 shrink-0 h-full flex-col border-r cyber-sidebar cyber-app-rail">
-        <div className="p-5 border-b border-border cyber-brand-bay">
-          <AppLogo subtitle={subtitle} />
-          <div className="cyber-brand-status">
-            <span className={connected ? "cyber-status-dot cyber-status-dot-live" : "cyber-status-dot cyber-status-dot-off"} />
-            <span>TRACE CORE</span>
-          </div>
-        </div>
-
-        <nav className="flex-1 p-3 space-y-1 overflow-y-auto cyber-nav-stack">
-          {NAV_IDS.map((item) => {
-            const active = page === item.id;
-            const badge =
-              item.id === "journal" || item.id === "actions" ? actionBadge : undefined;
-            return (
-              <button
-                key={item.id}
-                type="button"
-                onClick={() => onPageChange(item.id)}
-                aria-current={active ? "page" : undefined}
-                className={`w-full text-left rounded-xl px-3 py-3 transition-all border ${
-                  active
-                    ? "cyber-nav-active text-text"
-                    : "border-transparent hover:border-[var(--cyber-panel-border)] hover:bg-[var(--cyber-cyan-dim)]"
-                }`}
-              >
-                <div className="flex items-center gap-3">
-                  <span
-                    className={`flex h-9 w-9 items-center justify-center rounded-lg text-base ${
-                      active ? "cyber-nav-icon-active" : "cyber-nav-icon text-text-muted"
-                    }`}
-                  >
-                    {item.icon}
-                  </span>
-                  <div className="min-w-0 flex-1">
-                    <div className="flex items-center gap-2">
-                      <span
-                        className={`text-sm font-semibold font-display tracking-wide ${
-                          active ? "text-[var(--cyber-cyan)]" : "text-text-muted"
-                        }`}
-                      >
-                        {t(item.labelKey)}
-                      </span>
-                      {badge != null && badge > 0 && (
-                        <span className="rounded-full bg-[var(--cyber-cyan-dim)] text-[var(--cyber-cyan)] text-[10px] px-1.5 py-0.5 font-data font-medium">
-                          {badge > 99 ? "99+" : badge}
-                        </span>
-                      )}
-                    </div>
-                    <p className="text-[11px] text-text-muted truncate">{t(item.descKey)}</p>
-                  </div>
-                </div>
-              </button>
-            );
-          })}
-        </nav>
-
-        <div className="p-4 border-t border-border cyber-sidebar-footer">
-          <div className="flex items-center gap-2 text-xs font-data text-text-muted">
-            <span
-              className={`w-2 h-2 rounded-full ${connected ? "bg-success animate-pulse shadow-[0_0_8px_var(--cyber-green)]" : "bg-danger"}`}
-            />
-            {connected ? t("status.collecting") : t("status.disconnected")}
-          </div>
-        </div>
-      </aside>
+      <CyberSidebar
+        page={page}
+        onPageChange={onPageChange}
+        connected={connected}
+        subtitle={subtitle}
+        actionBadge={actionBadge}
+      />
 
       <div className="flex-1 flex flex-col min-w-0 min-h-0">
         <header className="shrink-0 z-20 border-b cyber-header cyber-topbar backdrop-blur-md">
@@ -180,20 +110,17 @@ export function DashboardLayout({
             </div>
           </div>
 
-          <nav className="md:hidden flex gap-1 overflow-x-auto px-3 pb-3 scrollbar-none">
-            {NAV_IDS.map((item) => (
+          <nav className="md:hidden flex gap-1.5 overflow-x-auto px-3 pb-3 scrollbar-none cyber-mobile-nav">
+            {SIDEBAR_NAV_ITEMS.map((item) => (
               <button
                 key={item.id}
                 type="button"
                 onClick={() => onPageChange(item.id)}
                 aria-current={page === item.id ? "page" : undefined}
-                className={`shrink-0 rounded-full px-4 py-2 text-sm font-display tracking-wide border transition-colors ${
-                  page === item.id
-                    ? "bg-[var(--cyber-cyan)] text-[var(--td-accent-foreground)] border-[var(--cyber-cyan)]"
-                    : "border-border text-text-muted hover:border-[var(--cyber-cyan)]"
-                }`}
+                className={`cyber-mobile-nav-chip shrink-0 ${page === item.id ? "is-active" : ""}`}
               >
-                {t(item.labelKey)}
+                <span className="font-data text-[10px] opacity-70">{item.code}</span>
+                <span>{t(item.labelKey)}</span>
               </button>
             ))}
           </nav>

@@ -2,9 +2,18 @@ import { TurtleIcon } from "./mascot/TurtleIcon";
 
 interface Props {
   subtitle?: string;
+  compact?: boolean;
 }
 
-export function AppLogo({ subtitle }: Props) {
+export function AppLogo({ subtitle, compact = false }: Props) {
+  if (compact) {
+    return (
+      <div className="flex items-center justify-center">
+        <TurtleIcon size="lg" className="shrink-0" />
+      </div>
+    );
+  }
+
   return (
     <div className="flex items-center gap-3 min-w-0">
       <TurtleIcon size="lg" className="shrink-0" />
