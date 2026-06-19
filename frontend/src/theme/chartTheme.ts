@@ -15,7 +15,8 @@ export interface ChartTheme {
   track: string;
 }
 
-export function readChartTheme(): ChartTheme {
+export function readChartTheme(_theme?: Theme): ChartTheme {
+  void _theme;
   const style = getComputedStyle(document.documentElement);
   const pick = (name: string, fallback: string) =>
     style.getPropertyValue(name).trim() || fallback;

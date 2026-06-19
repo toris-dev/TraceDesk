@@ -18,5 +18,13 @@ export default defineConfig([
     languageOptions: {
       globals: globals.browser,
     },
+    rules: {
+      // TraceDesk loads Tauri-backed data in effects; React's compiler-oriented rule is too
+      // restrictive for these app bootstrap and subscription flows.
+      'react-hooks/set-state-in-effect': 'off',
+      // Several modules intentionally export hooks, helpers, and components together.
+      // TypeScript and build checks cover those contracts more reliably than fast-refresh lint.
+      'react-refresh/only-export-components': 'off',
+    },
   },
 ])

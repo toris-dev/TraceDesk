@@ -32,7 +32,7 @@ export function ThemeProvider({ theme, setTheme, children }: Props) {
     applyTheme(theme);
   }, [theme]);
 
-  const chart = useMemo(() => readChartTheme(), [theme]);
+  const chart = useMemo(() => readChartTheme(theme), [theme]);
 
   const value = useMemo(
     () => ({ theme, setTheme, chart }),
