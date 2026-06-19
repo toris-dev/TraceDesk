@@ -27,3 +27,6 @@ app-icon.png
 
 # Local Product Design audit captures
 design-audit/screenshots/*.png
+
+# Local devPulse verification artifacts accidentally created from repo root
+output/
