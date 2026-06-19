@@ -13,6 +13,12 @@ const DEFAULT_H = 420;
 const MIN_W = 280;
 const MIN_H = 300;
 const MAX_W = 560;
+const VIEWPORT_GUTTER = 16;
+const DOCK_BOTTOM_OFFSET = 20;
+
+function maxWidth() {
+  return Math.max(MIN_W, Math.min(MAX_W, window.innerWidth - VIEWPORT_GUTTER * 2));
+}
 
 interface ChatMessage {
   role: "user" | "assistant";
@@ -32,7 +38,7 @@ function loadSize(): { w: number; h: number } {
     if (!raw) return { w: DEFAULT_W, h: DEFAULT_H };
     const parsed = JSON.parse(raw) as { w?: number; h?: number };
     return {
-      w: clamp(parsed.w ?? DEFAULT_W, MIN_W, MAX_W),
+      w: clamp(parsed.w ?? DEFAULT_W, MIN_W, maxWidth()),
       h: clamp(parsed.h ?? DEFAULT_H, MIN_H, maxHeight()),
     };
   } catch {
@@ -41,7 +47,7 @@ function loadSize(): { w: number; h: number } {
 }
 
 function maxHeight() {
-  return Math.floor(window.innerHeight * 0.75);
+  return Math.max(MIN_H, Math.min(Math.floor(window.innerHeight * 0.75), window.innerHeight - DOCK_BOTTOM_OFFSET - VIEWPORT_GUTTER * 2));
 }
 
 function clamp(n: number, min: number, max: number) {
@@ -96,6 +102,19 @@ export function MascotChatDock({ mood, greeting, selectedDate, onOpenSettings }:
     localStorage.setItem(SIZE_KEY, JSON.stringify(size));
   }, [size]);
 
+  useEffect(() => {
+    const syncToViewport = () => {
+      setSize((prev) => ({
+        w: clamp(prev.w, MIN_W, maxWidth()),
+        h: clamp(prev.h, MIN_H, maxHeight()),
+      }));
+    };
+
+    syncToViewport();
+    window.addEventListener("resize", syncToViewport);
+    return () => window.removeEventListener("resize", syncToViewport);
+  }, []);
+
   const onResizePointerDown = useCallback(
     (e: React.PointerEvent) => {
       e.preventDefault();
@@ -109,7 +128,7 @@ export function MascotChatDock({ mood, greeting, selectedDate, onOpenSettings }:
         const r = resizeRef.current;
         if (!r) return;
         setSize({
-          w: clamp(r.startW + (r.startX - ev.clientX), MIN_W, MAX_W),
+          w: clamp(r.startW + (r.startX - ev.clientX), MIN_W, maxWidth()),
           h: clamp(r.startH + (r.startY - ev.clientY), MIN_H, maxHeight()),
         });
       };
@@ -150,7 +169,7 @@ export function MascotChatDock({ mood, greeting, selectedDate, onOpenSettings }:
       <button
         type="button"
         onClick={() => setDismissed(false)}
-        className="fixed bottom-5 right-5 z-40 w-12 h-12 rounded-2xl border border-cyan-500/25 bg-surface-elevated shadow-lg hover:scale-110 transition-transform overflow-hidden mascot-float"
+        className="fixed right-4 bottom-4 md:right-5 md:bottom-5 z-40 w-12 h-12 rounded-2xl border border-cyan-500/25 bg-surface-elevated shadow-lg hover:scale-110 transition-transform overflow-hidden mascot-float"
         aria-label={t("llm.chatOpen")}
       >
         <img src={MASCOT_ICON_SRC} alt="" className="w-full h-full object-cover" />
@@ -162,7 +181,7 @@ export function MascotChatDock({ mood, greeting, selectedDate, onOpenSettings }:
 
   return (
     <div
-      className="fixed bottom-5 right-5 z-40 flex flex-col td-panel backdrop-blur shadow-xl overflow-hidden"
+      className="fixed right-4 bottom-4 md:right-5 md:bottom-5 z-40 flex max-w-[calc(100vw-2rem)] max-h-[calc(100vh-2rem)] flex-col td-panel backdrop-blur shadow-xl overflow-hidden"
       style={{ width: size.w, height: size.h }}
     >
       <div className="flex items-center justify-between gap-2 px-3 py-2 border-b border-border/60 shrink-0">

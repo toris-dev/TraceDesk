@@ -6,15 +6,22 @@ interface Props {
 
 export function AppLogo({ subtitle }: Props) {
   return (
-    <div className="flex items-center gap-3">
+    <div className="flex items-center gap-3 min-w-0">
       <TurtleIcon size="lg" className="shrink-0" />
-      <div>
-        <h1 className="text-xl font-display font-bold tracking-wider leading-tight text-text">
+      <div className="min-w-0">
+        <h1 className="whitespace-nowrap text-[1.75rem] font-display font-bold tracking-[0.1em] leading-none text-text">
           TRACE<span className="text-[var(--cyber-cyan)]">DESK</span>
         </h1>
-        {subtitle && <p className="text-text-muted text-sm font-data">{subtitle}</p>}
+        {subtitle && (
+          <p
+            className="mt-1 max-w-[12rem] truncate whitespace-nowrap text-[0.75rem] leading-none text-text-muted font-data tracking-[0.04em]"
+            title={subtitle}
+          >
+            {subtitle}
+          </p>
+        )}
         {!subtitle && (
-          <p className="text-text-muted text-xs font-data tracking-wide">개인 PC 활동 기록</p>
+          <p className="mt-1 text-text-muted text-xs font-data tracking-wide">개인 PC 활동 기록</p>
         )}
       </div>
     </div>

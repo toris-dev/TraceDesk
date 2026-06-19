@@ -103,7 +103,7 @@ export function ActivityToolbar({
   };
 
   return (
-    <div ref={wrapRef} className="relative flex flex-wrap items-center gap-2">
+    <div ref={wrapRef} className="relative flex items-center gap-2 min-w-0 max-w-full">
       <div className="flex items-center rounded-lg border border-border bg-surface-elevated overflow-hidden">
         <button
           type="button"
@@ -120,7 +120,8 @@ export function ActivityToolbar({
             setExportOpen(false);
             setCalendarOpen((v) => !v);
           }}
-          className="px-3 py-2 text-sm font-medium text-text hover:bg-surface transition-colors min-w-[7.5rem] text-left"
+          className="min-w-[8.5rem] max-w-[11rem] truncate whitespace-nowrap px-3 py-2 text-left text-sm font-medium text-text hover:bg-surface transition-colors"
+          title={isSelectedToday ? t("common.today") : formatDate(selectedDate, locale, true)}
         >
           {isSelectedToday ? t("common.today") : formatDate(selectedDate, locale, true)}
         </button>
@@ -140,13 +141,13 @@ export function ActivityToolbar({
         <button
           type="button"
           onClick={() => onChange(todayISO())}
-          className="rounded-lg border border-accent/40 px-2.5 py-2 text-xs text-accent hover:bg-accent/10"
+          className="shrink-0 whitespace-nowrap rounded-lg border border-accent/40 px-2.5 py-2 text-xs text-accent hover:bg-accent/10"
         >
           {t("common.today")}
         </button>
       )}
 
-      <div className="relative">
+      <div className="relative shrink-0">
         <button
           type="button"
           disabled={exporting}
