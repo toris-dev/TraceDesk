@@ -14,7 +14,7 @@ const MIN_W = 280;
 const MIN_H = 300;
 const MAX_W = 560;
 const VIEWPORT_GUTTER = 16;
-const DOCK_BOTTOM_OFFSET = 20;
+const DOCK_BOTTOM_OFFSET = 84;
 
 function maxWidth() {
   return Math.max(MIN_W, Math.min(MAX_W, window.innerWidth - VIEWPORT_GUTTER * 2));
@@ -181,8 +181,13 @@ export function MascotChatDock({ mood, greeting, selectedDate, onOpenSettings }:
 
   return (
     <div
-      className="fixed right-4 bottom-4 md:right-5 md:bottom-5 z-40 flex max-w-[calc(100vw-2rem)] max-h-[calc(100vh-2rem)] flex-col td-panel backdrop-blur shadow-xl overflow-hidden"
-      style={{ width: size.w, height: size.h }}
+      className="fixed z-40 flex max-w-[calc(100vw-2rem)] max-h-[calc(100vh-2rem)] flex-col td-panel backdrop-blur shadow-xl overflow-hidden"
+      style={{
+        width: size.w,
+        height: size.h,
+        right: VIEWPORT_GUTTER,
+        bottom: DOCK_BOTTOM_OFFSET,
+      }}
     >
       <div className="flex items-center justify-between gap-2 px-3 py-2 border-b border-border/60 shrink-0">
         <button
