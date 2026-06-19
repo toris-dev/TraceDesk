@@ -359,7 +359,7 @@ function AppContent({
 
   const mascotTab =
     page === "monitor"
-      ? "system"
+      ? "command"
       : page === "settings" || page === "ai"
         ? "settings"
         : "activity";

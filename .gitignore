@@ -24,3 +24,5 @@ node_modules
 # Generated icon source
 app-icon.png
 
+# Local Product Design audit captures
+design-audit/screenshots/*.png

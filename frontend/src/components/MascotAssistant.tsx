@@ -8,7 +8,7 @@ interface Props {
   connected: boolean;
   hasActivity: boolean;
   productivityScore?: number;
-  activeTab: "activity" | "system" | "settings";
+  activeTab: "activity" | "command" | "settings";
   setupCompleted: boolean;
   selectedDate: string;
   onOpenSettings: () => void;
@@ -35,8 +35,8 @@ export function MascotAssistant({
     if (error || !connected) {
       return { mood: "confused" as MascotMood, message: "연결 상태를 확인 중이에요..." };
     }
-    if (activeTab === "system") {
-      return { mood: "thinking" as MascotMood, message: "시스템 상태를 살펴볼게요" };
+    if (activeTab === "command") {
+      return { mood: "thinking" as MascotMood, message: "오늘의 행동 패턴을 같이 읽어볼게요" };
     }
     if (activeTab === "settings") {
       return { mood: "idle" as MascotMood, message: "설정은 여기서 바꿀 수 있어요" };

@@ -180,7 +180,285 @@ export interface SystemSnapshot {
 }
 
 async function invokeCmd<T>(cmd: string, args?: Record<string, unknown>): Promise<T> {
+  if (shouldUsePreviewMock()) {
+    return mockInvoke<T>(cmd, args);
+  }
   return invoke<T>(cmd, args);
+}
+
+function shouldUsePreviewMock(): boolean {
+  return Boolean(import.meta.env.DEV && typeof window !== "undefined" && !("__TAURI_INTERNALS__" in window));
+}
+
+function previewDate(): string {
+  return new Date().toISOString().slice(0, 10);
+}
+
+function previewSettings(): AppSettings {
+  return {
+    autostart_enabled: true,
+    retention_days: 90,
+    last_archive_at: null,
+    enable_accessibility: true,
+    enable_input_monitoring: true,
+    store_clipboard_preview: false,
+    store_screenshot_preview: true,
+    locale: "ko",
+    theme: "dark",
+    performance_mode: false,
+    setup_completed: true,
+    first_run_completed: true,
+    llm_provider: "ollama",
+    llm_model: "llama3.1",
+    ollama_base_url: "http://localhost:11434",
+    api_base_url: "",
+  };
+}
+
+function previewActivityBundle(date = previewDate()): ActivityBundle {
+  const events: ActivityItem[] = [
+    {
+      id: 12,
+      type: "SCREENSHOT",
+      time: `${date}T15:42:00+09:00`,
+      name: "Screenshot",
+      window_title: "Design QA board",
+      metadata: { source: "preview", path: "Desktop/Screenshots/design-review.png" },
+    },
+    {
+      id: 11,
+      type: "PASTE",
+      time: `${date}T15:28:00+09:00`,
+      name: "Cursor",
+      window_title: "AI chat session prompt",
+      metadata: { clipboard_preview: "사용자의 복사/붙여넣기/캡처 패턴으로 어떤 사람인지 분석해줘" },
+    },
+    {
+      id: 10,
+      type: "COPY",
+      time: `${date}T15:14:00+09:00`,
+      name: "Arc",
+      window_title: "Research notes",
+      metadata: { clipboard_preview: "cybernetic activity intelligence dashboard interaction model" },
+    },
+    {
+      id: 9,
+      type: "WINDOW_FOCUS",
+      time: `${date}T14:52:00+09:00`,
+      name: "Figma",
+      window_title: "TraceDesk redesign",
+      duration: 1260,
+    },
+    {
+      id: 8,
+      type: "COPY",
+      time: `${date}T14:39:00+09:00`,
+      name: "Notion",
+      window_title: "Product behavior notes",
+      metadata: { clipboard_preview: "인터랙티브하게 채팅할 수 있도록 지원" },
+    },
+    {
+      id: 7,
+      type: "WINDOW_FOCUS",
+      time: `${date}T13:46:00+09:00`,
+      name: "Cursor",
+      window_title: "TraceDesk source",
+      duration: 3180,
+    },
+  ];
+
+  return {
+    stats: {
+      active: 386,
+      idle: 74,
+      copy: 34,
+      paste: 21,
+      screenshot: 8,
+      top_application: "Cursor",
+    },
+    applications: [
+      { application: "Cursor", duration: 11880 },
+      { application: "Figma", duration: 7740 },
+      { application: "Arc", duration: 4920 },
+      { application: "Notion", duration: 3540 },
+      { application: "Terminal", duration: 2340 },
+      { application: "Finder", duration: 960 },
+    ],
+    timeline: [
+      { kind: "app", label: "Cursor", start: "09:12", end: "10:35", duration: 4980 },
+      { kind: "app", label: "Arc", start: "10:35", end: "11:12", duration: 2220 },
+      { kind: "idle", label: "Idle", start: "11:12", end: "11:31", duration: 1140 },
+      { kind: "app", label: "Figma", start: "11:31", end: "12:48", duration: 4620 },
+      { kind: "app", label: "Cursor", start: "13:46", end: "14:39", duration: 3180 },
+      { kind: "app", label: "Notion", start: "14:39", end: "14:52", duration: 780 },
+      { kind: "app", label: "Figma", start: "14:52", end: "15:13", duration: 1260 },
+      { kind: "app", label: "Cursor", start: "15:13", end: "16:05", duration: 3120 },
+    ],
+    idle: {
+      total_idle_minutes: 74,
+      session_count: 5,
+      longest_session_minutes: 28,
+      average_session_minutes: 14.8,
+      sessions: [
+        { start: "11:12", end: "11:31", duration_seconds: 1140 },
+        { start: "12:48", end: "13:09", duration_seconds: 1260 },
+      ],
+    },
+    action_hourly: Array.from({ length: 24 }, (_, hour) => ({
+      hour,
+      copy: [0, 0, 0, 0, 0, 0, 0, 1, 2, 5, 3, 2, 1, 4, 7, 6, 3, 0, 0, 0, 0, 0, 0, 0][hour],
+      paste: [0, 0, 0, 0, 0, 0, 0, 0, 1, 3, 2, 1, 0, 3, 4, 5, 2, 0, 0, 0, 0, 0, 0, 0][hour],
+      screenshot: [0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 0, 0, 1, 2, 2, 1, 0, 0, 0, 0, 0, 0, 0][hour],
+    })),
+    hourly: Array.from({ length: 24 }, (_, hour) => ({
+      hour,
+      activity: [0, 0, 0, 0, 0, 0, 0, 18, 42, 61, 57, 44, 22, 51, 68, 74, 39, 0, 0, 0, 0, 0, 0, 0][hour],
+    })),
+    events,
+    productivity: {
+      score: 82,
+      grade: "A",
+      active_ratio: 0.64,
+      avg_session_minutes: 38,
+      app_switches: 31,
+      focus_window: { start: "13:46", end: "16:05", intensity: 88 },
+      recommendations: ["AI 채팅 탭에서 오늘의 의사결정 패턴을 요약해 보세요."],
+    },
+    events_truncated: false,
+  };
+}
+
+function previewWeeklyReport(): WeeklyReport {
+  return {
+    period_start: "2026-06-13",
+    period_end: previewDate(),
+    total_active_minutes: 1840,
+    total_active_hours: 30.7,
+    avg_productivity_score: 78,
+    avg_daily_active_minutes: 263,
+    best_focus_day: null,
+    most_productive_day: null,
+    daily: [],
+    focus_pattern_summary: "오후 시간대에 디자인 검토와 구현 집중도가 높습니다.",
+    recommendations: ["AI 채팅 세션을 업무 단위로 나누면 회고 품질이 좋아집니다."],
+  };
+}
+
+async function mockInvoke<T>(cmd: string, args?: Record<string, unknown>): Promise<T> {
+  const date = typeof args?.date === "string" ? args.date : previewDate();
+  const bundle = previewActivityBundle(date);
+  const okPermissions: PermissionStatus = {
+    platform: "preview",
+    all_granted: true,
+    permissions: [],
+  };
+
+  const responses: Record<string, unknown> = {
+    get_settings: previewSettings(),
+    get_action_events: bundle.events.filter((event) =>
+      event.type === "COPY" || event.type === "PASTE" || event.type === "SCREENSHOT",
+    ),
+    get_action_date_summaries: [
+      {
+        date: previewDate(),
+        total: 63,
+        copy: 34,
+        paste: 21,
+        screenshot: 8,
+        top_location: "Cursor",
+        latest_time: "15:42",
+        latest_app: "Cursor",
+      },
+      {
+        date: "2026-06-18",
+        total: 48,
+        copy: 25,
+        paste: 18,
+        screenshot: 5,
+        top_location: "Figma",
+        latest_time: "17:10",
+        latest_app: "Figma",
+      },
+      {
+        date: "2026-06-17",
+        total: 37,
+        copy: 18,
+        paste: 14,
+        screenshot: 5,
+        top_location: "Arc",
+        latest_time: "16:24",
+        latest_app: "Arc",
+      },
+    ],
+    get_available_dates: [
+      { date: previewDate(), event_count: 63 },
+      { date: "2026-06-18", event_count: 48 },
+      { date: "2026-06-17", event_count: 37 },
+    ],
+    get_activity_bundle: bundle,
+    get_weekly_report: previewWeeklyReport(),
+    get_permissions_status: okPermissions,
+    refresh_permissions: okPermissions,
+    request_permissions: okPermissions,
+    get_llm_config: {
+      provider: "ollama",
+      model: "llama3.1",
+      ollama_base_url: "http://localhost:11434",
+      api_base_url: "",
+      has_api_key: false,
+      connected: true,
+    } satisfies LlmConfigView,
+    llm_chat: {
+      provider: "preview",
+      model: "design-audit",
+      answer:
+        "한 줄 정체성: 시각 자료를 모아 빠르게 구조화하는 정보 조립형 실행가입니다.\n\n행동 패턴: 오후에 Cursor, Figma, 브라우저를 오가며 복사/붙여넣기와 캡처가 집중됩니다.\n\n강점: 맥락을 빠르게 연결하고 산출물 중심으로 움직입니다.\n\n주의할 점: 앱 전환이 많아 세션 단위 회고가 없으면 판단 근거가 흩어질 수 있습니다.\n\n내일의 제안: AI 채팅에서 작업 단위별로 새 세션을 만들고 캡처 근거를 함께 요약하세요.",
+    } satisfies LlmChatResult,
+    llm_list_models: [{ id: "llama3.1", name: "llama3.1" }],
+    llm_test_connection: "ok",
+    get_db_stats: {
+      active_db_bytes: 4200000,
+      active_db_mb: 4.2,
+      event_count: 1240,
+      oldest_event: "2026-06-01",
+      retention_days: 90,
+      archives: [],
+      total_archive_bytes: 0,
+      total_archive_mb: 0,
+      last_archive_at: null,
+    } satisfies DbStats,
+  };
+
+  if (cmd === "update_settings") return { ...previewSettings(), ...definedSettings(args) } as T;
+  if (cmd === "complete_setup") return { settings: previewSettings(), permissions: okPermissions } as T;
+  if (cmd === "export_activity") return { saved: true, path: "/tmp/tracedesk-preview.csv", row_count: 63 } as T;
+  if (cmd === "set_llm_api_key" || cmd === "update_llm_settings") return responses.get_llm_config as T;
+  if (cmd === "run_archive_now") {
+    return {
+      archived_months: [],
+      deleted_events: 0,
+      freed_bytes_estimate: 0,
+      active_db_bytes_after: 4200000,
+    } as T;
+  }
+
+  if (cmd in responses) return responses[cmd] as T;
+  throw new Error(`Preview mock does not implement command: ${cmd}`);
+}
+
+function definedSettings(args?: Record<string, unknown>): Partial<AppSettings> {
+  const next: Partial<AppSettings> = {
+    autostart_enabled: typeof args?.autostartEnabled === "boolean" ? args.autostartEnabled : undefined,
+    retention_days: typeof args?.retentionDays === "number" ? args.retentionDays : undefined,
+    enable_accessibility: typeof args?.enableAccessibility === "boolean" ? args.enableAccessibility : undefined,
+    enable_input_monitoring: typeof args?.enableInputMonitoring === "boolean" ? args.enableInputMonitoring : undefined,
+    store_clipboard_preview: typeof args?.storeClipboardPreview === "boolean" ? args.storeClipboardPreview : undefined,
+    store_screenshot_preview: typeof args?.storeScreenshotPreview === "boolean" ? args.storeScreenshotPreview : undefined,
+    locale: typeof args?.locale === "string" ? args.locale : undefined,
+    theme: typeof args?.theme === "string" ? args.theme : undefined,
+    performance_mode: typeof args?.performanceMode === "boolean" ? args.performanceMode : undefined,
+  };
+  return Object.fromEntries(Object.entries(next).filter(([, value]) => value !== undefined)) as Partial<AppSettings>;
 }
 
 export function getActionEvents(date?: string) {
