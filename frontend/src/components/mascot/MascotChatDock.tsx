@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import type { LlmConfigView } from "../../api/client";
 import { getLlmConfig, llmChat } from "../../api/client";
 import { useI18n } from "../../i18n";
@@ -13,18 +14,24 @@ const DEFAULT_W = 360;
 const DEFAULT_H = 420;
 const MIN_W = 300;
 const MIN_H = 320;
-const MAX_W = 560;
-const VIEWPORT_GUTTER = 16;
-const LAUNCHER_SIZE = 48;
-const LAUNCHER_GAP = 16;
-const PANEL_BOTTOM_OFFSET = LAUNCHER_SIZE + LAUNCHER_GAP + 12;
+const MAX_W = 520;
+const DEFAULT_PANEL_GUTTER = 20;
+const LAUNCHER_SIZE = 56;
+const LAUNCHER_GAP = 18;
+const PANEL_BOTTOM_OFFSET = LAUNCHER_SIZE + LAUNCHER_GAP + 18;
 
 function maxWidth() {
-  return Math.max(MIN_W, Math.min(MAX_W, window.innerWidth - VIEWPORT_GUTTER * 2));
+  return Math.max(MIN_W, Math.min(MAX_W, window.innerWidth - DEFAULT_PANEL_GUTTER * 2));
 }
 
 function maxHeight() {
-  return Math.max(MIN_H, Math.min(Math.floor(window.innerHeight * 0.72), window.innerHeight - PANEL_BOTTOM_OFFSET - VIEWPORT_GUTTER * 2));
+  return Math.max(
+    MIN_H,
+    Math.min(
+      Math.floor(window.innerHeight * 0.78),
+      window.innerHeight - PANEL_BOTTOM_OFFSET - DEFAULT_PANEL_GUTTER * 2,
+    ),
+  );
 }
 
 function clamp(n: number, min: number, max: number) {
@@ -178,117 +185,128 @@ export function MascotChatDock({ mood, greeting, selectedDate, onOpenSettings }:
   };
 
   const connected = config?.connected && !!config.model;
+  const panelWidth = clamp(size.w, MIN_W, maxWidth());
+  const panelHeight = clamp(size.h, MIN_H, maxHeight());
+  const portalRoot = typeof document !== "undefined" ? document.body : null;
 
-  return (
+  if (!portalRoot) {
+    return null;
+  }
+
+  return createPortal(
     <>
       {open && (
-        <div
-          className="fixed z-40 flex max-w-[calc(100vw-2rem)] max-h-[calc(100vh-2rem)] flex-col td-panel backdrop-blur shadow-xl overflow-hidden"
-          style={{
-            width: size.w,
-            height: size.h,
-            right: VIEWPORT_GUTTER,
-            bottom: PANEL_BOTTOM_OFFSET,
-          }}
-        >
-          <div className="flex items-center justify-between gap-2 px-3 py-2 border-b border-border/60 shrink-0">
-            <button
-              type="button"
-              onPointerDown={onResizePointerDown}
-              className="text-text-muted hover:text-accent cursor-nwse-resize text-xs px-1 select-none touch-none"
-              title={t("llm.resizeHint")}
-              aria-label={t("llm.resizeHint")}
-            >
-              ↖
-            </button>
-            <span className="text-[10px] uppercase tracking-wider text-accent font-semibold">
-              Trace
-            </span>
-            <button
-              type="button"
-              onClick={() => setOpen(false)}
-              className="text-text-muted hover:text-text text-xs px-1"
-              aria-label={t("llm.chatClose")}
-            >
-              ×
-            </button>
-          </div>
-
-          <div className="flex items-center gap-2 px-3 py-2 border-b border-border/40 shrink-0">
-            <TortoiseMascot mood={mood} size="sm" interactive showBubble={mood !== "confused"} />
-            <p className="text-xs text-text-muted leading-relaxed flex-1 min-w-0">{greetingText}</p>
-          </div>
-
-          {!connected && (
-            <div className="px-3 py-2 bg-warning/10 border-b border-warning/20 shrink-0">
-              <p className="text-[11px] text-text-muted">{t("llm.chatNotConnected")}</p>
+        <div className="fixed inset-0 z-[60] pointer-events-none">
+          <div
+            className="absolute pointer-events-auto flex max-w-[calc(100vw-2.5rem)] max-h-[calc(100vh-2.5rem)] flex-col td-panel backdrop-blur shadow-xl overflow-hidden"
+            style={{
+              width: panelWidth,
+              height: panelHeight,
+              right: DEFAULT_PANEL_GUTTER,
+              bottom: PANEL_BOTTOM_OFFSET,
+              left: "auto",
+              top: "auto",
+            }}
+          >
+            <div className="flex items-center justify-between gap-2 px-3 py-2 border-b border-border/60 shrink-0">
               <button
                 type="button"
-                onClick={onOpenSettings}
-                className="text-[11px] text-accent hover:underline mt-0.5"
+                onPointerDown={onResizePointerDown}
+                className="text-text-muted hover:text-accent cursor-nwse-resize text-xs px-1 select-none touch-none"
+                title={t("llm.resizeHint")}
+                aria-label={t("llm.resizeHint")}
               >
-                {t("llm.openSettings")}
+                ↖
+              </button>
+              <span className="text-[10px] uppercase tracking-wider text-accent font-semibold">
+                Trace
+              </span>
+              <button
+                type="button"
+                onClick={() => setOpen(false)}
+                className="text-text-muted hover:text-text text-xs px-1"
+                aria-label={t("llm.chatClose")}
+              >
+                ×
               </button>
             </div>
-          )}
 
-          <div ref={scrollRef} className="flex-1 overflow-y-auto px-3 py-2 space-y-2 min-h-0">
-            {messages.slice(1).map((m, i) => (
-              <div
-                key={`${m.role}-${i}`}
-                className={`text-xs leading-relaxed rounded-lg px-2.5 py-1.5 max-w-[92%] ${
-                  m.role === "user"
-                    ? "ml-auto bg-accent/15 text-text border border-accent/25"
-                    : "mr-auto bg-surface text-text-muted border border-border/60"
-                }`}
-              >
-                {m.text}
+            <div className="flex items-center gap-2 px-3 py-2 border-b border-border/40 shrink-0">
+              <TortoiseMascot mood={mood} size="sm" interactive showBubble={mood !== "confused"} />
+              <p className="text-xs text-text-muted leading-relaxed flex-1 min-w-0">{greetingText}</p>
+            </div>
+
+            {!connected && (
+              <div className="px-3 py-2 bg-warning/10 border-b border-warning/20 shrink-0">
+                <p className="text-[11px] text-text-muted">{t("llm.chatNotConnected")}</p>
+                <button
+                  type="button"
+                  onClick={onOpenSettings}
+                  className="text-[11px] text-accent hover:underline mt-0.5"
+                >
+                  {t("llm.openSettings")}
+                </button>
               </div>
-            ))}
-            {loading && (
-              <p className="text-[11px] text-text-muted font-data animate-pulse">{t("llm.asking")}</p>
             )}
-          </div>
 
-          <div className="px-3 py-2 border-t border-border/60 space-y-2 shrink-0">
-            <label className="flex items-center gap-2 text-[11px] text-text-muted cursor-pointer">
-              <input
-                type="checkbox"
-                checked={includeActivity}
-                onChange={(e) => setIncludeActivity(e.target.checked)}
-                className="rounded border-border"
-              />
-              {t("llm.includeActivity")}
-            </label>
-            <div className="flex gap-2">
-              <input
-                type="text"
-                value={input}
-                onChange={(e) => setInput(e.target.value)}
-                onKeyDown={(e) => {
-                  if (e.key === "Enter" && !e.shiftKey) {
-                    e.preventDefault();
-                    void send();
-                  }
-                }}
-                placeholder={t("llm.chatPlaceholder")}
-                disabled={loading}
-                className="flex-1 min-w-0 rounded-lg border border-border bg-surface px-2.5 py-1.5 text-xs font-data disabled:opacity-50"
-              />
-              <button
-                type="button"
-                onClick={() => void send()}
-                disabled={loading || !input.trim()}
-                className="shrink-0 px-3 py-1.5 rounded-lg bg-accent text-accent-foreground text-xs hover:bg-accent/90 disabled:opacity-50"
-              >
-                {t("llm.chatSend")}
-              </button>
+            <div ref={scrollRef} className="flex-1 overflow-y-auto px-3 py-2 space-y-2 min-h-0">
+              {messages.slice(1).map((m, i) => (
+                <div
+                  key={`${m.role}-${i}`}
+                  className={`text-xs leading-relaxed rounded-lg px-2.5 py-1.5 max-w-[92%] ${
+                    m.role === "user"
+                      ? "ml-auto bg-accent/15 text-text border border-accent/25"
+                      : "mr-auto bg-surface text-text-muted border border-border/60"
+                  }`}
+                >
+                  {m.text}
+                </div>
+              ))}
+              {loading && (
+                <p className="text-[11px] text-text-muted font-data animate-pulse">{t("llm.asking")}</p>
+              )}
             </div>
-            {error && !loading && (
-              <p className="text-[10px] text-danger-text font-data truncate" title={error}>
-                {error}
-              </p>
-            )}
+
+            <div className="px-3 py-2 border-t border-border/60 space-y-2 shrink-0">
+              <label className="flex items-center gap-2 text-[11px] text-text-muted cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={includeActivity}
+                  onChange={(e) => setIncludeActivity(e.target.checked)}
+                  className="rounded border-border"
+                />
+                {t("llm.includeActivity")}
+              </label>
+              <div className="flex gap-2">
+                <input
+                  type="text"
+                  value={input}
+                  onChange={(e) => setInput(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter" && !e.shiftKey) {
+                      e.preventDefault();
+                      void send();
+                    }
+                  }}
+                  placeholder={t("llm.chatPlaceholder")}
+                  disabled={loading}
+                  className="flex-1 min-w-0 rounded-lg border border-border bg-surface px-2.5 py-1.5 text-xs font-data disabled:opacity-50"
+                />
+                <button
+                  type="button"
+                  onClick={() => void send()}
+                  disabled={loading || !input.trim()}
+                  className="shrink-0 px-3 py-1.5 rounded-lg bg-accent text-accent-foreground text-xs hover:bg-accent/90 disabled:opacity-50"
+                >
+                  {t("llm.chatSend")}
+                </button>
+              </div>
+              {error && !loading && (
+                <p className="text-[10px] text-danger-text font-data truncate" title={error}>
+                  {error}
+                </p>
+              )}
+            </div>
           </div>
         </div>
       )}
@@ -296,11 +314,12 @@ export function MascotChatDock({ mood, greeting, selectedDate, onOpenSettings }:
       <button
         type="button"
         onClick={() => setOpen((prev) => !prev)}
-        className="fixed right-4 bottom-4 md:right-5 md:bottom-5 z-40 w-12 h-12 rounded-2xl border border-cyan-500/25 bg-surface-elevated shadow-lg hover:scale-110 transition-transform overflow-hidden mascot-float"
+        className="fixed right-5 bottom-5 z-[61] h-14 w-14 rounded-[1.15rem] border border-cyan-500/25 bg-surface-elevated shadow-lg hover:scale-110 transition-transform overflow-hidden mascot-float"
         aria-label={open ? t("llm.chatClose") : t("llm.chatOpen")}
       >
         <img src={MASCOT_ICON_SRC} alt="" className="w-full h-full object-cover" />
       </button>
-    </>
+    </>,
+    portalRoot,
   );
 }

@@ -120,7 +120,7 @@ export function ActivityToolbar({
             setExportOpen(false);
             setCalendarOpen((v) => !v);
           }}
-          className="min-w-[8.5rem] max-w-[11rem] truncate whitespace-nowrap px-3 py-2 text-left text-sm font-medium text-text hover:bg-surface transition-colors"
+          className="min-w-[8rem] max-w-[10.5rem] truncate whitespace-nowrap px-3 py-2 text-left text-[13px] font-data font-medium text-text hover:bg-surface transition-colors md:text-sm"
           title={isSelectedToday ? t("common.today") : formatDate(selectedDate, locale, true)}
         >
           {isSelectedToday ? t("common.today") : formatDate(selectedDate, locale, true)}
