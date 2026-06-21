@@ -55,6 +55,9 @@ const AnalyticsView = lazy(() =>
 const AIChatView = lazy(() =>
   import("./views/AIChatView").then((m) => ({ default: m.AIChatView })),
 );
+const FounderCrmView = lazy(() =>
+  import("./views/FounderCrmView").then((m) => ({ default: m.FounderCrmView })),
+);
 const DevPulseView = lazy(() =>
   import("./views/DevPulseView").then((m) => ({ default: m.DevPulseView })),
 );
@@ -129,7 +132,7 @@ function AppContent({
   onSettingsChange: (settings: AppSettings) => void;
 }) {
   const { locale, t } = useI18n();
-  const [page, setPage] = useState<DashboardPage>("monitor");
+  const [page, setPage] = useState<DashboardPage>("crm");
   const [selectedDate, setSelectedDate] = useState(todayISO);
   const [availableDates, setAvailableDates] = useState<string[]>([]);
   const [stats, setStats] = useState<DailyStatistics | null>(null);
@@ -435,6 +438,13 @@ function AppContent({
     }
 
     switch (page) {
+      case "crm":
+        return (
+          <Suspense fallback={<MascotScene mood="loading" title={t("nav.crm")} size="md" />}>
+            <FounderCrmView />
+          </Suspense>
+        );
+
       case "monitor":
         return (
           <Suspense
@@ -561,13 +571,6 @@ function AppContent({
           </Suspense>
         );
 
-      case "pulse":
-        return (
-          <Suspense fallback={<MascotScene mood="loading" title={t("nav.pulse")} size="md" />}>
-            <DevPulseView />
-          </Suspense>
-        );
-
       default:
         return null;
     }
@@ -589,8 +592,8 @@ function AppContent({
         connected={connected}
         subtitle={
           isActivityPage(page)
-            ? formatDate(selectedDate, locale)
-            : formatDate(todayISO(), locale)
+            ? formatDate(selectedDate, locale, true)
+            : formatDate(todayISO(), locale, true)
         }
         actionBadge={stats ? stats.copy + stats.paste + stats.screenshot : actionEvents.length}
         toolbar={activityToolbar}
@@ -639,6 +642,12 @@ function AppContent({
               onDateChange={setSelectedDate}
               onOpenSettings={() => setPage("settings")}
             />
+          </Suspense>
+        )}
+
+        {page === "pulse" && (
+          <Suspense fallback={<MascotScene mood="loading" title={t("nav.pulse")} size="md" />}>
+            <DevPulseView />
           </Suspense>
         )}
 

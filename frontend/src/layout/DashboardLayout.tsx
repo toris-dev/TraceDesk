@@ -5,6 +5,7 @@ import { useI18n } from "../i18n";
 import { CyberSidebar, SIDEBAR_NAV_ITEMS } from "./CyberSidebar";
 
 export type DashboardPage =
+  | "crm"
   | "monitor"
   | "journal"
   | "overview"
@@ -16,6 +17,7 @@ export type DashboardPage =
   | "settings";
 
 const DASHBOARD_PAGES: DashboardPage[] = [
+  "crm",
   "monitor",
   "journal",
   "overview",

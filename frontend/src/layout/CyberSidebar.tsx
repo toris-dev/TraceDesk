@@ -14,15 +14,16 @@ type NavItem = {
 };
 
 const NAV_ITEMS: NavItem[] = [
-  { id: "monitor", code: "01", labelKey: "nav.monitor", descKey: "nav.monitorDesc", group: "command" },
-  { id: "ai", code: "02", labelKey: "nav.ai", descKey: "nav.aiDesc", group: "command" },
-  { id: "pulse", code: "03", labelKey: "nav.pulse", descKey: "nav.pulseDesc", group: "command" },
-  { id: "journal", code: "04", labelKey: "nav.journal", descKey: "nav.journalDesc", group: "record" },
-  { id: "overview", code: "05", labelKey: "nav.overview", descKey: "nav.overviewDesc", group: "record" },
-  { id: "actions", code: "06", labelKey: "nav.actions", descKey: "nav.actionsDesc", group: "record" },
-  { id: "timeline", code: "07", labelKey: "nav.timeline", descKey: "nav.timelineDesc", group: "record" },
-  { id: "analytics", code: "08", labelKey: "nav.analytics", descKey: "nav.analyticsDesc", group: "record" },
-  { id: "settings", code: "09", labelKey: "nav.settings", descKey: "nav.settingsDesc", group: "config" },
+  { id: "crm", code: "01", labelKey: "nav.crm", descKey: "nav.crmDesc", group: "command" },
+  { id: "monitor", code: "02", labelKey: "nav.monitor", descKey: "nav.monitorDesc", group: "command" },
+  { id: "ai", code: "03", labelKey: "nav.ai", descKey: "nav.aiDesc", group: "command" },
+  { id: "pulse", code: "04", labelKey: "nav.pulse", descKey: "nav.pulseDesc", group: "command" },
+  { id: "journal", code: "05", labelKey: "nav.journal", descKey: "nav.journalDesc", group: "record" },
+  { id: "overview", code: "06", labelKey: "nav.overview", descKey: "nav.overviewDesc", group: "record" },
+  { id: "actions", code: "07", labelKey: "nav.actions", descKey: "nav.actionsDesc", group: "record" },
+  { id: "timeline", code: "08", labelKey: "nav.timeline", descKey: "nav.timelineDesc", group: "record" },
+  { id: "analytics", code: "09", labelKey: "nav.analytics", descKey: "nav.analyticsDesc", group: "record" },
+  { id: "settings", code: "10", labelKey: "nav.settings", descKey: "nav.settingsDesc", group: "config" },
 ];
 
 const GROUP_ORDER: NavItem["group"][] = ["command", "record", "config"];
@@ -70,7 +71,7 @@ export function CyberSidebar({
   return (
     <aside
       className={`cyber-sidebar cyber-app-rail cyber-sidebar-shell hidden md:flex shrink-0 h-full flex-col border-r transition-[width] duration-300 ease-out ${
-        collapsed ? "w-[4.5rem]" : "w-[17.5rem]"
+        collapsed ? "w-[5rem]" : "w-[19.5rem]"
       }`}
       data-collapsed={collapsed ? "true" : "false"}
     >
@@ -114,7 +115,7 @@ export function CyberSidebar({
               {!collapsed && (
                 <h2 className="cyber-nav-group-label">{t(`sidebar.group.${group}`)}</h2>
               )}
-              <ul className={`space-y-1 ${collapsed ? "space-y-1.5" : ""}`}>
+              <ul className={`space-y-2 ${collapsed ? "space-y-1.5" : ""}`}>
                 {items.map((item) => {
                   const active = page === item.id;
                   const isHover = hovered === item.id;

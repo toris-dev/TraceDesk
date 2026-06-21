@@ -4,6 +4,7 @@ mod analytics;
 mod archive;
 mod collector;
 mod commands;
+mod crm;
 mod database;
 mod devpulse;
 mod devpulse_secrets;
@@ -156,6 +157,10 @@ pub fn run() {
             commands::check_health,
             commands::check_permissions_cli,
             commands::request_permissions_cli,
+            crm::get_founder_crm,
+            crm::save_founder_contact,
+            crm::delete_founder_contact,
+            crm::add_founder_interaction,
             settings_commands::get_settings,
             settings_commands::update_settings,
             settings_commands::complete_setup,

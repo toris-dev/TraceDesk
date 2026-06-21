@@ -356,6 +356,121 @@ function previewWeeklyReport(): WeeklyReport {
   };
 }
 
+function previewFounderCrm(): FounderCrmOverview {
+  return {
+    summary: {
+      total_contacts: 9,
+      people_met: 4,
+      investors: 2,
+      customers: 3,
+      overdue_followups: 2,
+      due_this_week: 4,
+    },
+    contacts: [
+      {
+        id: 1,
+        name: "박서준",
+        category: "investor",
+        company: "Seed Orbit",
+        role: "Partner",
+        status: "warm",
+        priority: "high",
+        preferred_channel: "email",
+        tags: ["saas", "b2b", "fundraising"],
+        notes: "TraceDesk의 자동 행동 기록과 Founder CRM 전환 포인트에 관심이 큼.",
+        last_contact_at: "2026-05-31 14:30:00",
+        next_follow_up_at: "2026-06-22 10:00:00",
+        created_at: "2026-05-01 10:00:00",
+        updated_at: "2026-06-18 09:12:00",
+        ai_nudge: "3주 전에 이야기했던 사람입니다. 이번 주 투자 업데이트를 보내세요.",
+        days_since_contact: 21,
+        days_until_follow_up: 1,
+      },
+      {
+        id: 2,
+        name: "Mina Cho",
+        category: "customer",
+        company: "Studio Vector",
+        role: "Product Lead",
+        status: "pilot",
+        priority: "critical",
+        preferred_channel: "telegram",
+        tags: ["pilot", "design team"],
+        notes: "캡처 로그와 활동 맥락을 CRM 알림에 연결하는 흐름 테스트 중.",
+        last_contact_at: "2026-06-19 16:20:00",
+        next_follow_up_at: "2026-06-21 18:00:00",
+        created_at: "2026-06-02 11:00:00",
+        updated_at: "2026-06-19 16:20:00",
+        ai_nudge: "오늘 팔로업 예정입니다. 시범 운영 피드백을 받아야 합니다.",
+        days_since_contact: 2,
+        days_until_follow_up: 0,
+      },
+      {
+        id: 3,
+        name: "이하늘",
+        category: "person",
+        company: "Open Builders",
+        role: "Solo Founder",
+        status: "active",
+        priority: "medium",
+        preferred_channel: "kakao",
+        tags: ["founder", "community"],
+        notes: "행동 패턴 분석 기능을 커뮤니티 데모용으로 소개할 수 있음.",
+        last_contact_at: "2026-06-10 19:10:00",
+        next_follow_up_at: "2026-06-28 11:00:00",
+        created_at: "2026-06-10 19:10:00",
+        updated_at: "2026-06-15 08:00:00",
+        ai_nudge: "11일 전에 대화했습니다. 이번 주 안에 데모 링크를 보내세요.",
+        days_since_contact: 11,
+        days_until_follow_up: 7,
+      },
+    ],
+    reminders: [
+      {
+        contact_id: 2,
+        name: "Mina Cho",
+        category: "customer",
+        priority: "critical",
+        next_follow_up_at: "2026-06-21 18:00:00",
+        days_until_follow_up: 0,
+        ai_nudge: "오늘 팔로업 예정입니다. 시범 운영 피드백을 받아야 합니다.",
+      },
+      {
+        contact_id: 1,
+        name: "박서준",
+        category: "investor",
+        priority: "high",
+        next_follow_up_at: "2026-06-22 10:00:00",
+        days_until_follow_up: 1,
+        ai_nudge: "3주 전에 이야기했던 사람입니다. 이번 주 투자 업데이트를 보내세요.",
+      },
+    ],
+    recent_interactions: [
+      {
+        id: 101,
+        contact_id: 2,
+        contact_name: "Mina Cho",
+        kind: "call",
+        summary: "파일럿 팀이 후속 리마인더와 AI 요약 알림을 좋아함. 도입 논의 유지.",
+        happened_at: "2026-06-19 16:20:00",
+        source: "manual",
+        created_at: "2026-06-19 16:25:00",
+      },
+      {
+        id: 102,
+        contact_id: 1,
+        contact_name: "박서준",
+        kind: "meeting",
+        summary: "Founder CRM 전환 방향 설명. 개인 생산성 데이터와 관계 맥락 결합에 관심.",
+        happened_at: "2026-05-31 14:30:00",
+        source: "manual",
+        created_at: "2026-05-31 16:00:00",
+      },
+    ],
+    suggested_prompt: "3주 전에 이야기했던 사람입니다. 지금 업데이트를 보내면 기억이 살아 있을 확률이 높습니다.",
+  };
+}
+
 async function mockInvoke<T>(cmd: string, args?: Record<string, unknown>): Promise<T> {
   const date = typeof args?.date === "string" ? args.date : previewDate();
   const bundle = previewActivityBundle(date);
@@ -409,6 +524,7 @@ async function mockInvoke<T>(cmd: string, args?: Record<string, unknown>): Promi
     ],
     get_activity_bundle: bundle,
     get_weekly_report: previewWeeklyReport(),
+    get_founder_crm: previewFounderCrm(),
     get_permissions_status: okPermissions,
     refresh_permissions: okPermissions,
     request_permissions: okPermissions,
@@ -741,6 +857,35 @@ async function mockInvoke<T>(cmd: string, args?: Record<string, unknown>): Promi
       active_db_bytes_after: 4200000,
     } as T;
   }
+  if (cmd === "save_founder_contact") {
+    const current = previewFounderCrm();
+    const next = args?.contact as Partial<FounderCrmContact> | undefined;
+    return {
+      ...current.contacts[0],
+      ...next,
+      id: next?.id ?? 99,
+      name: String(next?.name ?? current.contacts[0].name),
+      category: String(next?.category ?? current.contacts[0].category),
+      status: String(next?.status ?? current.contacts[0].status),
+      priority: String(next?.priority ?? current.contacts[0].priority),
+      tags: Array.isArray(next?.tags) ? next.tags : current.contacts[0].tags,
+      notes: String(next?.notes ?? current.contacts[0].notes),
+    } as T;
+  }
+  if (cmd === "add_founder_interaction") {
+    const input = (args?.interaction as Partial<FounderCrmInteraction> | undefined) ?? {};
+    return {
+      id: 999,
+      contact_id: Number(input.contact_id ?? 1),
+      contact_name: "Preview contact",
+      kind: String(input.kind ?? "note"),
+      summary: String(input.summary ?? "Preview interaction"),
+      happened_at: String(input.happened_at ?? `${previewDate()} 10:00:00`),
+      source: String(input.source ?? "manual"),
+      created_at: `${previewDate()} 10:00:00`,
+    } as T;
+  }
+  if (cmd === "delete_founder_contact") return undefined as T;
 
   if (cmd in responses) return responses[cmd] as T;
   throw new Error(`Preview mock does not implement command: ${cmd}`);
@@ -767,6 +912,80 @@ export function getActionEvents(date?: string) {
 
 export function getActionDateSummaries(limit = 14) {
   return invokeCmd<ActionDateSummary[]>("get_action_date_summaries", { limit });
+}
+
+export interface FounderCrmContact {
+  id?: number;
+  name: string;
+  category: string;
+  company: string | null;
+  role: string | null;
+  status: string;
+  priority: string;
+  preferred_channel: string | null;
+  tags: string[];
+  notes: string;
+  last_contact_at: string | null;
+  next_follow_up_at: string | null;
+  created_at?: string;
+  updated_at?: string;
+  ai_nudge?: string;
+  days_since_contact?: number | null;
+  days_until_follow_up?: number | null;
+}
+
+export interface FounderCrmInteraction {
+  id?: number;
+  contact_id: number;
+  contact_name?: string;
+  kind: string;
+  summary: string;
+  happened_at: string;
+  source: string | null;
+  created_at?: string;
+}
+
+export interface FounderCrmReminder {
+  contact_id: number;
+  name: string;
+  category: string;
+  priority: string;
+  next_follow_up_at: string;
+  days_until_follow_up: number;
+  ai_nudge: string;
+}
+
+export interface FounderCrmSummary {
+  total_contacts: number;
+  people_met: number;
+  investors: number;
+  customers: number;
+  overdue_followups: number;
+  due_this_week: number;
+}
+
+export interface FounderCrmOverview {
+  summary: FounderCrmSummary;
+  contacts: FounderCrmContact[];
+  reminders: FounderCrmReminder[];
+  recent_interactions: FounderCrmInteraction[];
+  suggested_prompt: string;
+}
+
+export function getFounderCrm() {
+  return invokeCmd<FounderCrmOverview>("get_founder_crm");
+}
+
+export function saveFounderContact(contact: FounderCrmContact) {
+  return invokeCmd<FounderCrmContact>("save_founder_contact", { contact });
+}
+
+export function deleteFounderContact(id: number) {
+  return invokeCmd<void>("delete_founder_contact", { id });
+}
+
+export function addFounderInteraction(interaction: FounderCrmInteraction) {
+  return invokeCmd<FounderCrmInteraction>("add_founder_interaction", { interaction });
 }
 
 export interface LlmConfigView {
