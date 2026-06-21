@@ -1,14 +1,18 @@
 import { useEffect, useMemo, useState } from "react";
 import {
+  checkDevPulseSns,
   getDevPulseInfraStatus,
   getDevPulseSecretsStatus,
   getDevPulseStatus,
   pickDevPulseRootDir,
   runDevPulseNow,
+  runDevPulseSnsNow,
   startDevPulseInfra,
   startDevPulseDaemon,
+  startDevPulseSnsDaemon,
   stopDevPulseInfra,
   stopDevPulseDaemon,
+  stopDevPulseSnsDaemon,
   toAssetUrl,
   updateDevPulseSecrets,
   updateDevPulseSettings,
@@ -220,11 +224,32 @@ export function DevPulseView() {
     }
   }
 
+  async function controlSns(action: "check" | "run" | "start-daemon" | "stop-daemon") {
+    setRunning(action);
+    try {
+      if (action === "check") {
+        await checkDevPulseSns();
+      } else if (action === "run") {
+        await runDevPulseSnsNow();
+      } else if (action === "start-daemon") {
+        await startDevPulseSnsDaemon();
+      } else {
+        await stopDevPulseSnsDaemon();
+      }
+      await load();
+    } catch (e) {
+      setError(formatError(e));
+    } finally {
+      setRunning(null);
+    }
+  }
+
   const cards = status?.payload.artifacts?.cards ?? [];
   const bundles = status?.payload.artifacts?.bundles ?? [];
   const dbBundles = status?.payload.db?.recent_bundles ?? [];
   const snsPosts = status?.payload.sns?.recent_posts ?? [];
   const snsStats = status?.payload.sns?.stats;
+  const snsRuntime = status?.sns_runtime;
   const slots = status?.payload.bundle?.slots ?? [];
   const progress = status?.payload.progress;
   const db = status?.payload.db;
@@ -739,6 +764,42 @@ export function DevPulseView() {
             </div>
             <strong className="text-sm text-text-muted">{snsStats?.posted ?? 0}</strong>
           </div>
+          <div className="mt-4 flex flex-wrap gap-2">
+            <button
+              type="button"
+              onClick={() => void controlSns("check")}
+              disabled={running !== null || !rootReady}
+              className="rounded-lg border border-border px-3 py-2 text-sm text-text-muted hover:border-[var(--cyber-cyan)] disabled:opacity-50"
+            >
+              {t("pulse.snsCheck")}
+            </button>
+            <button
+              type="button"
+              onClick={() => void controlSns("run")}
+              disabled={running !== null || !rootReady}
+              className="rounded-lg border border-border px-3 py-2 text-sm text-text-muted hover:border-[var(--cyber-cyan)] disabled:opacity-50"
+            >
+              {t("pulse.snsRunNow")}
+            </button>
+            <button
+              type="button"
+              onClick={() => void controlSns(snsRuntime?.daemon_running ? "stop-daemon" : "start-daemon")}
+              disabled={running !== null || !rootReady}
+              className="rounded-lg border border-accent/40 px-3 py-2 text-sm text-accent hover:bg-accent/10 disabled:opacity-50"
+            >
+              {snsRuntime?.daemon_running ? t("pulse.snsStopDaemon") : t("pulse.snsStartDaemon")}
+            </button>
+          </div>
+          <div className="mt-4 grid gap-3 md:grid-cols-3">
+            <StatCell label={t("pulse.snsDaemonStatus")} value={snsRuntime?.daemon_running ? t("pulse.running") : t("pulse.idle")} />
+            <StatCell label={t("pulse.snsLastCheck")} value={fmt(snsRuntime?.last_check_at)} />
+            <StatCell label={t("pulse.snsLastRun")} value={fmt(snsRuntime?.last_run_at)} />
+          </div>
+          {snsRuntime?.last_error && (
+            <div className="mt-3 rounded-lg border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-xs text-amber-200">
+              {snsRuntime.last_error}
+            </div>
+          )}
           <div className="mt-4 flex flex-wrap gap-2">
             <span className="rounded-full border border-emerald-500/30 bg-emerald-500/10 px-3 py-1 text-[11px] font-data text-emerald-300">
               {t("pulse.snsPosted")} {snsStats?.posted ?? 0}

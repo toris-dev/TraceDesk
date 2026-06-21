@@ -40,10 +40,15 @@ pub struct DevPulseState(pub Arc<Mutex<DevPulseRuntime>>);
 #[derive(Default)]
 pub struct DevPulseRuntime {
     daemon: Option<Child>,
+    sns_daemon: Option<Child>,
     run_in_flight: bool,
+    sns_in_flight: bool,
     last_cron_key: Option<String>,
     last_run_at: Option<String>,
     last_error: Option<String>,
+    sns_last_check_at: Option<String>,
+    sns_last_run_at: Option<String>,
+    sns_last_error: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -76,6 +81,16 @@ pub struct DevPulseRuntimeView {
 }
 
 #[derive(Debug, Clone, Serialize)]
+pub struct DevPulseSnsRuntimeView {
+    pub daemon_running: bool,
+    pub daemon_pid: Option<u32>,
+    pub in_flight: bool,
+    pub last_check_at: Option<String>,
+    pub last_run_at: Option<String>,
+    pub last_error: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize)]
 pub struct DevPulseDependencyView {
     pub key: String,
     pub label: String,
@@ -103,6 +118,7 @@ pub struct DevPulseInfraStatusView {
 pub struct DevPulseStatusView {
     pub config: DevPulseConfigView,
     pub runtime: DevPulseRuntimeView,
+    pub sns_runtime: DevPulseSnsRuntimeView,
     pub dependencies: Vec<DevPulseDependencyView>,
     pub payload: Value,
 }
@@ -318,6 +334,35 @@ fn build_runtime_view(runtime: &mut DevPulseRuntime) -> DevPulseRuntimeView {
         run_in_flight: runtime.run_in_flight,
         last_run_at: runtime.last_run_at.clone(),
         last_error: runtime.last_error.clone(),
+    }
+}
+
+fn build_sns_runtime_view(runtime: &mut DevPulseRuntime) -> DevPulseSnsRuntimeView {
+    let mut daemon_running = false;
+    let mut daemon_pid = None;
+    if let Some(child) = runtime.sns_daemon.as_mut() {
+        match child.try_wait() {
+            Ok(Some(_)) => {
+                runtime.sns_daemon = None;
+            }
+            Ok(None) => {
+                daemon_running = true;
+                daemon_pid = Some(child.id());
+            }
+            Err(e) => {
+                runtime.sns_last_error = Some(format!("sns daemon status check failed: {e}"));
+                runtime.sns_daemon = None;
+            }
+        }
+    }
+
+    DevPulseSnsRuntimeView {
+        daemon_running,
+        daemon_pid,
+        in_flight: runtime.sns_in_flight,
+        last_check_at: runtime.sns_last_check_at.clone(),
+        last_run_at: runtime.sns_last_run_at.clone(),
+        last_error: runtime.sns_last_error.clone(),
     }
 }
 
@@ -867,6 +912,40 @@ fn configure_env(cmd: &mut Command, settings: &AppSettings, bridge_dir: Option<&
     }
 }
 
+fn instagram_poster_dir(root: &Path) -> PathBuf {
+    root.join("services").join("instagram-poster")
+}
+
+fn run_instagram_poster(root: &Path, args: &[&str]) -> Result<String, String> {
+    let python = python_bin(root);
+    let poster_dir = instagram_poster_dir(root);
+    let output = Command::new(python)
+        .current_dir(&poster_dir)
+        .arg("main.py")
+        .args(args)
+        .env("PYTHONUNBUFFERED", "1")
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .output()
+        .map_err(|e| format!("failed to run instagram poster: {e}"))?;
+
+    let stdout = String::from_utf8_lossy(&output.stdout).trim().to_string();
+    let stderr = String::from_utf8_lossy(&output.stderr).trim().to_string();
+    if output.status.success() {
+        if stdout.is_empty() {
+            Ok("ok".to_string())
+        } else {
+            Ok(stdout)
+        }
+    } else if !stderr.is_empty() {
+        Err(stderr)
+    } else if !stdout.is_empty() {
+        Err(stdout)
+    } else {
+        Err("instagram poster command failed".to_string())
+    }
+}
+
 fn absolutize_output_reference(root: &Path, value: &str) -> Option<String> {
     let relative = value
         .strip_prefix("/output/")
@@ -1275,6 +1354,7 @@ pub fn get_devpulse_status(
         return Ok(DevPulseStatusView {
             config: build_config_view(&settings, None),
             runtime: build_runtime_view(&mut runtime),
+            sns_runtime: build_sns_runtime_view(&mut runtime),
             dependencies: Vec::new(),
             payload: empty_dashboard_payload(),
         });
@@ -1300,6 +1380,7 @@ pub fn get_devpulse_status(
     Ok(DevPulseStatusView {
         config: build_config_view(&settings, Some(&root)),
         runtime: build_runtime_view(&mut runtime),
+        sns_runtime: build_sns_runtime_view(&mut runtime),
         dependencies,
         payload,
     })
@@ -1463,6 +1544,106 @@ pub fn stop_devpulse_daemon(
         let _ = child.wait();
     }
     Ok(build_runtime_view(&mut runtime))
+}
+
+#[tauri::command]
+pub async fn check_devpulse_sns(
+    settings_state: State<'_, SettingsState>,
+    runtime_state: State<'_, DevPulseState>,
+) -> Result<String, String> {
+    {
+        let mut runtime = runtime_state.0.lock().map_err(|e| e.to_string())?;
+        if runtime.sns_in_flight {
+            return Err("SNS poster job already running".to_string());
+        }
+        runtime.sns_in_flight = true;
+    }
+
+    let settings = settings_state.0.read().map_err(|e| e.to_string())?.clone();
+    let root = resolve_root(&settings)?;
+    let result = tauri::async_runtime::spawn_blocking(move || run_instagram_poster(&root, &["--check"]))
+        .await
+        .map_err(|e| e.to_string())?;
+
+    let mut runtime = runtime_state.0.lock().map_err(|e| e.to_string())?;
+    runtime.sns_in_flight = false;
+    runtime.sns_last_check_at = Some(Local::now().to_rfc3339());
+    if let Err(error) = &result {
+        runtime.sns_last_error = Some(error.clone());
+    } else {
+        runtime.sns_last_error = None;
+    }
+    result
+}
+
+#[tauri::command]
+pub async fn run_devpulse_sns_now(
+    settings_state: State<'_, SettingsState>,
+    runtime_state: State<'_, DevPulseState>,
+) -> Result<String, String> {
+    {
+        let mut runtime = runtime_state.0.lock().map_err(|e| e.to_string())?;
+        if runtime.sns_in_flight {
+            return Err("SNS poster job already running".to_string());
+        }
+        runtime.sns_in_flight = true;
+    }
+
+    let settings = settings_state.0.read().map_err(|e| e.to_string())?.clone();
+    let root = resolve_root(&settings)?;
+    let result = tauri::async_runtime::spawn_blocking(move || run_instagram_poster(&root, &["--once"]))
+        .await
+        .map_err(|e| e.to_string())?;
+
+    let mut runtime = runtime_state.0.lock().map_err(|e| e.to_string())?;
+    runtime.sns_in_flight = false;
+    runtime.sns_last_run_at = Some(Local::now().to_rfc3339());
+    if let Err(error) = &result {
+        runtime.sns_last_error = Some(error.clone());
+    } else {
+        runtime.sns_last_error = None;
+    }
+    result
+}
+
+#[tauri::command]
+pub fn start_devpulse_sns_daemon(
+    settings_state: State<SettingsState>,
+    runtime_state: State<DevPulseState>,
+) -> Result<DevPulseSnsRuntimeView, String> {
+    let settings = settings_state.0.read().map_err(|e| e.to_string())?.clone();
+    let root = resolve_root(&settings)?;
+    let python = python_bin(&root);
+    let poster_dir = instagram_poster_dir(&root);
+
+    let mut runtime = runtime_state.0.lock().map_err(|e| e.to_string())?;
+    if runtime.sns_daemon.is_some() {
+        return Ok(build_sns_runtime_view(&mut runtime));
+    }
+
+    let child = Command::new(python)
+        .current_dir(&poster_dir)
+        .arg("main.py")
+        .env("PYTHONUNBUFFERED", "1")
+        .stdout(Stdio::null())
+        .stderr(Stdio::null())
+        .spawn()
+        .map_err(|e| format!("failed to start SNS poster daemon: {e}"))?;
+    runtime.sns_daemon = Some(child);
+    runtime.sns_last_error = None;
+    Ok(build_sns_runtime_view(&mut runtime))
+}
+
+#[tauri::command]
+pub fn stop_devpulse_sns_daemon(
+    runtime_state: State<DevPulseState>,
+) -> Result<DevPulseSnsRuntimeView, String> {
+    let mut runtime = runtime_state.0.lock().map_err(|e| e.to_string())?;
+    if let Some(mut child) = runtime.sns_daemon.take() {
+        let _ = child.kill();
+        let _ = child.wait();
+    }
+    Ok(build_sns_runtime_view(&mut runtime))
 }
 
 pub fn default_devpulse_feeds() -> Vec<String> {

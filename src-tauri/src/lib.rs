@@ -182,6 +182,10 @@ pub fn run() {
             devpulse::stop_devpulse_infra,
             devpulse::start_devpulse_daemon,
             devpulse::stop_devpulse_daemon,
+            devpulse::check_devpulse_sns,
+            devpulse::run_devpulse_sns_now,
+            devpulse::start_devpulse_sns_daemon,
+            devpulse::stop_devpulse_sns_daemon,
             devpulse::pick_devpulse_root_dir,
         ])
         .build(tauri::generate_context!())

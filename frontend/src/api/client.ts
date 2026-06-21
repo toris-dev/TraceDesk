@@ -483,6 +483,14 @@ async function mockInvoke<T>(cmd: string, args?: Record<string, unknown>): Promi
         last_run_at: "2026-06-19T21:50:00+09:00",
         last_error: null,
       },
+      sns_runtime: {
+        daemon_running: false,
+        daemon_pid: null,
+        in_flight: false,
+        last_check_at: "2026-06-19T20:40:00+09:00",
+        last_run_at: "2026-06-19T21:12:00+09:00",
+        last_error: null,
+      },
       dependencies: [
         {
           key: "python",
@@ -673,6 +681,19 @@ async function mockInvoke<T>(cmd: string, args?: Record<string, unknown>): Promi
       daemon_pid: cmd === "start_devpulse_daemon" ? 4242 : null,
       run_in_flight: false,
       last_run_at: "2026-06-19T21:50:00+09:00",
+      last_error: null,
+    } as T;
+  }
+  if (cmd === "check_devpulse_sns" || cmd === "run_devpulse_sns_now") {
+    return "ok" as T;
+  }
+  if (cmd === "start_devpulse_sns_daemon" || cmd === "stop_devpulse_sns_daemon") {
+    return {
+      daemon_running: cmd === "start_devpulse_sns_daemon",
+      daemon_pid: cmd === "start_devpulse_sns_daemon" ? 4343 : null,
+      in_flight: false,
+      last_check_at: "2026-06-19T20:40:00+09:00",
+      last_run_at: "2026-06-19T21:12:00+09:00",
       last_error: null,
     } as T;
   }
@@ -1023,6 +1044,15 @@ export interface DevPulseRuntimeView {
   last_error: string | null;
 }
 
+export interface DevPulseSnsRuntimeView {
+  daemon_running: boolean;
+  daemon_pid: number | null;
+  in_flight: boolean;
+  last_check_at: string | null;
+  last_run_at: string | null;
+  last_error: string | null;
+}
+
 export interface DevPulseDependencyView {
   key: string;
   label: string;
@@ -1095,6 +1125,7 @@ export interface DevPulseSnsPostRecord {
 export interface DevPulseStatusView {
   config: DevPulseConfigView;
   runtime: DevPulseRuntimeView;
+  sns_runtime: DevPulseSnsRuntimeView;
   dependencies: DevPulseDependencyView[];
   payload: {
     progress?: {
@@ -1240,6 +1271,22 @@ export function startDevPulseDaemon() {
 
 export function stopDevPulseDaemon() {
   return invokeCmd<DevPulseRuntimeView>("stop_devpulse_daemon");
+}
+
+export function checkDevPulseSns() {
+  return invokeCmd<string>("check_devpulse_sns");
+}
+
+export function runDevPulseSnsNow() {
+  return invokeCmd<string>("run_devpulse_sns_now");
+}
+
+export function startDevPulseSnsDaemon() {
+  return invokeCmd<DevPulseSnsRuntimeView>("start_devpulse_sns_daemon");
+}
+
+export function stopDevPulseSnsDaemon() {
+  return invokeCmd<DevPulseSnsRuntimeView>("stop_devpulse_sns_daemon");
 }
 
 export function toAssetUrl(path: string | null | undefined) {
