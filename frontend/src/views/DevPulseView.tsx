@@ -245,6 +245,10 @@ export function DevPulseView() {
   const setupHint = status?.config.setup_hint || status?.runtime.last_error || t("pulse.setupSaveHint");
   const dockerReady = Boolean(infraStatus?.docker_available && infraStatus?.docker_daemon_ready);
   const composeDir = infraStatus?.compose_dir?.trim() ? infraStatus.compose_dir : t("pulse.composeMissing");
+  const crawlCount = progress?.total_collected ?? db?.counts?.collected ?? 0;
+  const cardCount = counts?.cards ?? db?.counts?.card_generated ?? 0;
+  const videoCount = counts?.bundles ?? db?.bundle_total ?? 0;
+  const snsCount = progress?.total_published ?? db?.counts?.published ?? 0;
 
   return (
     <div className="space-y-6 max-w-[1480px]">
@@ -377,6 +381,29 @@ export function DevPulseView() {
               {progress?.total_published ?? 0}
             </strong>
           </div>
+        </div>
+
+        <div className="mt-3 grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+          <QuickPulseMetric
+            label={t("pulse.crawlCount")}
+            value={String(crawlCount)}
+            tone="cyan"
+          />
+          <QuickPulseMetric
+            label={t("pulse.cardCount")}
+            value={String(cardCount)}
+            tone="emerald"
+          />
+          <QuickPulseMetric
+            label={t("pulse.videoCount")}
+            value={String(videoCount)}
+            tone="violet"
+          />
+          <QuickPulseMetric
+            label={t("pulse.snsCount")}
+            value={String(snsCount)}
+            tone="amber"
+          />
         </div>
 
         <div className="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-5">
@@ -841,6 +868,30 @@ function StatCell({
     <div className="rounded-xl border border-border/70 bg-surface/60 p-3">
       <p className="text-[11px] font-data text-text-muted">{label}</p>
       <strong className={`mt-2 block text-lg ${tone === "danger" ? "text-danger-text" : "text-text"}`}>{value}</strong>
+    </div>
+  );
+}
+
+function QuickPulseMetric({
+  label,
+  value,
+  tone,
+}: {
+  label: string;
+  value: string;
+  tone: "cyan" | "emerald" | "violet" | "amber";
+}) {
+  const toneClass = {
+    cyan: "border-[var(--cyber-cyan)]/30 bg-[var(--cyber-cyan-dim)]/10 text-[var(--cyber-cyan)]",
+    emerald: "border-emerald-500/30 bg-emerald-500/10 text-emerald-300",
+    violet: "border-fuchsia-500/30 bg-fuchsia-500/10 text-fuchsia-300",
+    amber: "border-amber-500/30 bg-amber-500/10 text-amber-300",
+  }[tone];
+
+  return (
+    <div className={`rounded-xl border p-4 ${toneClass}`}>
+      <p className="text-[11px] font-data uppercase tracking-[0.12em] opacity-80">{label}</p>
+      <strong className="mt-2 block text-2xl font-semibold">{value}</strong>
     </div>
   );
 }
