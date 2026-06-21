@@ -1489,10 +1489,11 @@ pub fn get_devpulse_secrets_status() -> DevPulseSecretsStatusView {
 pub fn update_devpulse_secrets(
     args: UpdateDevPulseSecretsArgs,
 ) -> Result<DevPulseSecretsStatusView, String> {
-    let token = args.mastodon_access_token.unwrap_or_default();
     let existing = load_devpulse_secrets();
     save_devpulse_secrets(&DevPulseSecrets {
-        mastodon_access_token: token,
+        mastodon_access_token: args
+            .mastodon_access_token
+            .unwrap_or(existing.mastodon_access_token),
         x_api_key: args.x_api_key.unwrap_or(existing.x_api_key),
         x_api_secret: args.x_api_secret.unwrap_or(existing.x_api_secret),
         x_access_token: args.x_access_token.unwrap_or(existing.x_access_token),
