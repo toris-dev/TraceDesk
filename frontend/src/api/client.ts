@@ -611,6 +611,9 @@ async function mockInvoke<T>(cmd: string, args?: Record<string, unknown>): Promi
             timezone: "Asia/Seoul",
             poll_sec: 60,
             graph_version: "v21.0",
+            media_port: 9088,
+            media_public_base_url: "",
+            minio_public_endpoint: "https://minio.example.com",
             dry_run: true,
           },
           state_db: "/Users/toris/projects/devPulse/output/instagram/state.db",
@@ -693,6 +696,9 @@ async function mockInvoke<T>(cmd: string, args?: Record<string, unknown>): Promi
       timezone: String(args?.timezone ?? "Asia/Seoul"),
       poll_sec: Number(args?.pollSec ?? 60),
       graph_version: String(args?.graphVersion ?? "v21.0"),
+      media_port: Number(args?.mediaPort ?? 9088),
+      media_public_base_url: String(args?.mediaPublicBaseUrl ?? ""),
+      minio_public_endpoint: String(args?.minioPublicEndpoint ?? "https://minio.example.com"),
       dry_run: Boolean(args?.dryRun ?? true),
     } as T;
   }
@@ -1156,6 +1162,9 @@ export interface DevPulseSnsConfigView {
   timezone: string;
   poll_sec: number;
   graph_version: string;
+  media_port: number;
+  media_public_base_url: string;
+  minio_public_endpoint: string;
   dry_run: boolean;
 }
 
@@ -1289,6 +1298,9 @@ export function updateDevPulseSnsConfig(opts: {
   timezone?: string;
   pollSec?: number;
   graphVersion?: string;
+  mediaPort?: number;
+  mediaPublicBaseUrl?: string;
+  minioPublicEndpoint?: string;
   dryRun?: boolean;
 }) {
   return invokeCmd<DevPulseSnsConfigView>("update_devpulse_sns_config", {
@@ -1300,6 +1312,9 @@ export function updateDevPulseSnsConfig(opts: {
     timezone: opts.timezone ?? null,
     pollSec: opts.pollSec ?? null,
     graphVersion: opts.graphVersion ?? null,
+    mediaPort: opts.mediaPort ?? null,
+    mediaPublicBaseUrl: opts.mediaPublicBaseUrl ?? null,
+    minioPublicEndpoint: opts.minioPublicEndpoint ?? null,
     dryRun: opts.dryRun ?? null,
   });
 }

@@ -84,6 +84,9 @@ export function DevPulseView() {
   const [igTimezone, setIgTimezone] = useState("Asia/Seoul");
   const [igPollSec, setIgPollSec] = useState(60);
   const [igGraphVersion, setIgGraphVersion] = useState("v21.0");
+  const [igMediaPort, setIgMediaPort] = useState(9088);
+  const [igMediaPublicBaseUrl, setIgMediaPublicBaseUrl] = useState("");
+  const [igMinioPublicEndpoint, setIgMinioPublicEndpoint] = useState("");
   const [igDryRun, setIgDryRun] = useState(true);
   const [secretStatus, setSecretStatus] = useState<DevPulseSecretsStatusView | null>(null);
   const [infraStatus, setInfraStatus] = useState<DevPulseInfraStatusView | null>(null);
@@ -131,6 +134,9 @@ export function DevPulseView() {
         setIgTimezone(snsConfig.timezone);
         setIgPollSec(snsConfig.poll_sec);
         setIgGraphVersion(snsConfig.graph_version);
+        setIgMediaPort(snsConfig.media_port);
+        setIgMediaPublicBaseUrl(snsConfig.media_public_base_url);
+        setIgMinioPublicEndpoint(snsConfig.minio_public_endpoint);
         setIgDryRun(snsConfig.dry_run);
       }
     } catch (e) {
@@ -280,6 +286,9 @@ export function DevPulseView() {
         timezone: igTimezone,
         pollSec: igPollSec,
         graphVersion: igGraphVersion,
+        mediaPort: igMediaPort,
+        mediaPublicBaseUrl: igMediaPublicBaseUrl,
+        minioPublicEndpoint: igMinioPublicEndpoint,
         dryRun: igDryRun,
       });
       setIgAccessToken("");
@@ -919,6 +928,33 @@ export function DevPulseView() {
               <input
                 value={igGraphVersion}
                 onChange={(e) => setIgGraphVersion(e.target.value)}
+                className="w-full rounded-lg border border-border bg-surface px-3 py-2 text-sm"
+              />
+            </label>
+            <label className="space-y-1 text-sm">
+              <span className="text-text-muted">IG_MEDIA_PORT</span>
+              <input
+                type="number"
+                min={1}
+                max={65535}
+                value={igMediaPort}
+                onChange={(e) => setIgMediaPort(Number(e.target.value) || 1)}
+                className="w-full rounded-lg border border-border bg-surface px-3 py-2 text-sm"
+              />
+            </label>
+            <label className="space-y-1 text-sm md:col-span-2">
+              <span className="text-text-muted">IG_MEDIA_PUBLIC_BASE_URL</span>
+              <input
+                value={igMediaPublicBaseUrl}
+                onChange={(e) => setIgMediaPublicBaseUrl(e.target.value)}
+                className="w-full rounded-lg border border-border bg-surface px-3 py-2 text-sm"
+              />
+            </label>
+            <label className="space-y-1 text-sm md:col-span-2">
+              <span className="text-text-muted">MINIO_PUBLIC_ENDPOINT</span>
+              <input
+                value={igMinioPublicEndpoint}
+                onChange={(e) => setIgMinioPublicEndpoint(e.target.value)}
                 className="w-full rounded-lg border border-border bg-surface px-3 py-2 text-sm"
               />
             </label>

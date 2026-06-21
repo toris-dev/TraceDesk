@@ -161,6 +161,9 @@ pub struct DevPulseSnsConfigView {
     pub timezone: String,
     pub poll_sec: u32,
     pub graph_version: String,
+    pub media_port: u32,
+    pub media_public_base_url: String,
+    pub minio_public_endpoint: String,
     pub dry_run: bool,
 }
 
@@ -175,6 +178,9 @@ pub struct UpdateDevPulseSnsConfigArgs {
     pub timezone: Option<String>,
     pub poll_sec: Option<u32>,
     pub graph_version: Option<String>,
+    pub media_port: Option<u32>,
+    pub media_public_base_url: Option<String>,
+    pub minio_public_endpoint: Option<String>,
     pub dry_run: Option<bool>,
 }
 
@@ -483,6 +489,11 @@ fn build_instagram_config_view(root: &Path) -> DevPulseSnsConfigView {
             .and_then(|value| value.parse::<u32>().ok())
             .unwrap_or(60),
         graph_version: env_lookup(&env_entries, "IG_GRAPH_VERSION").unwrap_or_else(|| "v21.0".to_string()),
+        media_port: env_lookup(&env_entries, "IG_MEDIA_PORT")
+            .and_then(|value| value.parse::<u32>().ok())
+            .unwrap_or(9088),
+        media_public_base_url: env_lookup(&env_entries, "IG_MEDIA_PUBLIC_BASE_URL").unwrap_or_default(),
+        minio_public_endpoint: env_lookup(&env_entries, "MINIO_PUBLIC_ENDPOINT").unwrap_or_default(),
         dry_run: env_lookup(&env_entries, "IG_DRY_RUN")
             .map(|value| matches!(value.to_ascii_lowercase().as_str(), "1" | "true" | "yes"))
             .unwrap_or(true),
@@ -553,6 +564,9 @@ fn build_instagram_status(root: &Path) -> Value {
     }
     if !config.has_access_token {
         issues.push("IG_ACCESS_TOKEN missing".to_string());
+    }
+    if config.media_public_base_url.trim().is_empty() && config.minio_public_endpoint.trim().is_empty() {
+        issues.push("public media endpoint missing".to_string());
     }
 
     if !state_db.exists() {
@@ -1517,6 +1531,18 @@ pub fn update_devpulse_sns_config(
         (
             "IG_GRAPH_VERSION".to_string(),
             args.graph_version.unwrap_or(current.graph_version),
+        ),
+        (
+            "IG_MEDIA_PORT".to_string(),
+            args.media_port.unwrap_or(current.media_port).clamp(1, 65535).to_string(),
+        ),
+        (
+            "IG_MEDIA_PUBLIC_BASE_URL".to_string(),
+            args.media_public_base_url.unwrap_or(current.media_public_base_url),
+        ),
+        (
+            "MINIO_PUBLIC_ENDPOINT".to_string(),
+            args.minio_public_endpoint.unwrap_or(current.minio_public_endpoint),
         ),
         (
             "IG_DRY_RUN".to_string(),
