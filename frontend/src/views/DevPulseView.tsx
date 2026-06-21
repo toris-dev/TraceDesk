@@ -76,6 +76,10 @@ export function DevPulseView() {
   const [snsMode, setSnsMode] = useState("file");
   const [mastodonInstance, setMastodonInstance] = useState("");
   const [mastodonToken, setMastodonToken] = useState("");
+  const [xApiKey, setXApiKey] = useState("");
+  const [xApiSecret, setXApiSecret] = useState("");
+  const [xAccessToken, setXAccessToken] = useState("");
+  const [xAccessSecret, setXAccessSecret] = useState("");
   const [igAppId, setIgAppId] = useState("");
   const [igUserId, setIgUserId] = useState("");
   const [igAccessToken, setIgAccessToken] = useState("");
@@ -201,6 +205,19 @@ export function DevPulseView() {
         const nextSecrets = await updateDevPulseSecrets({ mastodonAccessToken: mastodonToken.trim() });
         setSecretStatus(nextSecrets);
         setMastodonToken("");
+      }
+      if (snsMode === "x" && (xApiKey.trim() || xApiSecret.trim() || xAccessToken.trim() || xAccessSecret.trim())) {
+        const nextSecrets = await updateDevPulseSecrets({
+          xApiKey: xApiKey.trim(),
+          xApiSecret: xApiSecret.trim(),
+          xAccessToken: xAccessToken.trim(),
+          xAccessSecret: xAccessSecret.trim(),
+        });
+        setSecretStatus(nextSecrets);
+        setXApiKey("");
+        setXApiSecret("");
+        setXAccessToken("");
+        setXAccessSecret("");
       }
       await load();
     } catch (e) {
@@ -724,6 +741,7 @@ export function DevPulseView() {
               >
                 <option value="file">file</option>
                 <option value="mastodon">mastodon</option>
+                <option value="x">x</option>
               </select>
             </label>
           </div>
@@ -740,28 +758,80 @@ export function DevPulseView() {
           </label>
 
           <div className="grid gap-4 md:grid-cols-2">
-            <label className="space-y-1 text-sm">
-              <span className="text-text-muted">{t("pulse.mastodonInstance")}</span>
-              <input
-                value={mastodonInstance}
-                onChange={(e) => setMastodonInstance(e.target.value)}
-                className="w-full rounded-lg border border-border bg-surface px-3 py-2 text-sm"
-                placeholder="https://mastodon.social"
-              />
-            </label>
-            <label className="space-y-1 text-sm">
-              <span className="text-text-muted">{t("pulse.mastodonToken")}</span>
-              <input
-                type="password"
-                value={mastodonToken}
-                onChange={(e) => setMastodonToken(e.target.value)}
-                className="w-full rounded-lg border border-border bg-surface px-3 py-2 text-sm"
-                placeholder={secretStatus?.has_mastodon_token ? t("pulse.secretSaved") : ""}
-              />
-            </label>
+            {snsMode === "mastodon" && (
+              <>
+                <label className="space-y-1 text-sm">
+                  <span className="text-text-muted">{t("pulse.mastodonInstance")}</span>
+                  <input
+                    value={mastodonInstance}
+                    onChange={(e) => setMastodonInstance(e.target.value)}
+                    className="w-full rounded-lg border border-border bg-surface px-3 py-2 text-sm"
+                    placeholder="https://mastodon.social"
+                  />
+                </label>
+                <label className="space-y-1 text-sm">
+                  <span className="text-text-muted">{t("pulse.mastodonToken")}</span>
+                  <input
+                    type="password"
+                    value={mastodonToken}
+                    onChange={(e) => setMastodonToken(e.target.value)}
+                    className="w-full rounded-lg border border-border bg-surface px-3 py-2 text-sm"
+                    placeholder={secretStatus?.has_mastodon_token ? t("pulse.secretSaved") : ""}
+                  />
+                </label>
+              </>
+            )}
+            {snsMode === "x" && (
+              <>
+                <label className="space-y-1 text-sm">
+                  <span className="text-text-muted">X_API_KEY</span>
+                  <input
+                    value={xApiKey}
+                    onChange={(e) => setXApiKey(e.target.value)}
+                    className="w-full rounded-lg border border-border bg-surface px-3 py-2 text-sm"
+                    placeholder={secretStatus?.has_x_credentials ? t("pulse.secretSaved") : ""}
+                  />
+                </label>
+                <label className="space-y-1 text-sm">
+                  <span className="text-text-muted">X_API_SECRET</span>
+                  <input
+                    type="password"
+                    value={xApiSecret}
+                    onChange={(e) => setXApiSecret(e.target.value)}
+                    className="w-full rounded-lg border border-border bg-surface px-3 py-2 text-sm"
+                    placeholder={secretStatus?.has_x_credentials ? t("pulse.secretSaved") : ""}
+                  />
+                </label>
+                <label className="space-y-1 text-sm">
+                  <span className="text-text-muted">X_ACCESS_TOKEN</span>
+                  <input
+                    value={xAccessToken}
+                    onChange={(e) => setXAccessToken(e.target.value)}
+                    className="w-full rounded-lg border border-border bg-surface px-3 py-2 text-sm"
+                    placeholder={secretStatus?.has_x_credentials ? t("pulse.secretSaved") : ""}
+                  />
+                </label>
+                <label className="space-y-1 text-sm">
+                  <span className="text-text-muted">X_ACCESS_SECRET</span>
+                  <input
+                    type="password"
+                    value={xAccessSecret}
+                    onChange={(e) => setXAccessSecret(e.target.value)}
+                    className="w-full rounded-lg border border-border bg-surface px-3 py-2 text-sm"
+                    placeholder={secretStatus?.has_x_credentials ? t("pulse.secretSaved") : ""}
+                  />
+                </label>
+              </>
+            )}
           </div>
           <p className="text-xs text-text-muted">
-            {secretStatus?.has_mastodon_token ? t("pulse.secretSaved") : t("pulse.secretMissing")}
+            {snsMode === "x"
+              ? secretStatus?.has_x_credentials
+                ? t("pulse.secretSaved")
+                : t("pulse.secretMissing")
+              : secretStatus?.has_mastodon_token
+                ? t("pulse.secretSaved")
+                : t("pulse.secretMissing")}
           </p>
 
           <div className="flex flex-wrap gap-2">

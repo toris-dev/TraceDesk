@@ -144,11 +144,16 @@ pub struct UpdateDevPulseSettingsArgs {
 #[serde(rename_all = "camelCase")]
 pub struct UpdateDevPulseSecretsArgs {
     pub mastodon_access_token: Option<String>,
+    pub x_api_key: Option<String>,
+    pub x_api_secret: Option<String>,
+    pub x_access_token: Option<String>,
+    pub x_access_secret: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize)]
 pub struct DevPulseSecretsStatusView {
     pub has_mastodon_token: bool,
+    pub has_x_credentials: bool,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -1058,6 +1063,18 @@ fn configure_env(cmd: &mut Command, settings: &AppSettings, bridge_dir: Option<&
             devpulse_secrets.mastodon_access_token.trim(),
         );
     }
+    if !devpulse_secrets.x_api_key.trim().is_empty() {
+        cmd.env("X_API_KEY", devpulse_secrets.x_api_key.trim());
+    }
+    if !devpulse_secrets.x_api_secret.trim().is_empty() {
+        cmd.env("X_API_SECRET", devpulse_secrets.x_api_secret.trim());
+    }
+    if !devpulse_secrets.x_access_token.trim().is_empty() {
+        cmd.env("X_ACCESS_TOKEN", devpulse_secrets.x_access_token.trim());
+    }
+    if !devpulse_secrets.x_access_secret.trim().is_empty() {
+        cmd.env("X_ACCESS_SECRET", devpulse_secrets.x_access_secret.trim());
+    }
 }
 
 fn instagram_poster_dir(root: &Path) -> PathBuf {
@@ -1445,10 +1462,10 @@ pub fn update_devpulse_settings(
         settings.devpulse_bundle_size = size.clamp(1, 24);
     }
     if let Some(mode) = args.sns_mode {
-        settings.devpulse_sns_mode = if mode.trim().eq_ignore_ascii_case("mastodon") {
-            "mastodon".into()
-        } else {
-            "file".into()
+        settings.devpulse_sns_mode = match mode.trim().to_ascii_lowercase().as_str() {
+            "mastodon" => "mastodon".into(),
+            "x" => "x".into(),
+            _ => "file".into(),
         };
     }
     if let Some(instance) = args.mastodon_instance {
@@ -1464,6 +1481,7 @@ pub fn update_devpulse_settings(
 pub fn get_devpulse_secrets_status() -> DevPulseSecretsStatusView {
     DevPulseSecretsStatusView {
         has_mastodon_token: has_mastodon_token(),
+        has_x_credentials: has_x_credentials(),
     }
 }
 
@@ -1472,12 +1490,18 @@ pub fn update_devpulse_secrets(
     args: UpdateDevPulseSecretsArgs,
 ) -> Result<DevPulseSecretsStatusView, String> {
     let token = args.mastodon_access_token.unwrap_or_default();
+    let existing = load_devpulse_secrets();
     save_devpulse_secrets(&DevPulseSecrets {
         mastodon_access_token: token,
+        x_api_key: args.x_api_key.unwrap_or(existing.x_api_key),
+        x_api_secret: args.x_api_secret.unwrap_or(existing.x_api_secret),
+        x_access_token: args.x_access_token.unwrap_or(existing.x_access_token),
+        x_access_secret: args.x_access_secret.unwrap_or(existing.x_access_secret),
     })
     .map_err(|e| e.to_string())?;
     Ok(DevPulseSecretsStatusView {
         has_mastodon_token: has_mastodon_token(),
+        has_x_credentials: has_x_credentials(),
     })
 }
 
@@ -1558,6 +1582,14 @@ fn has_mastodon_token() -> bool {
         .mastodon_access_token
         .trim()
         .is_empty()
+}
+
+fn has_x_credentials() -> bool {
+    let secrets = load_devpulse_secrets();
+    !secrets.x_api_key.trim().is_empty()
+        && !secrets.x_api_secret.trim().is_empty()
+        && !secrets.x_access_token.trim().is_empty()
+        && !secrets.x_access_secret.trim().is_empty()
 }
 
 #[tauri::command]

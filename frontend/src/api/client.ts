@@ -684,7 +684,12 @@ async function mockInvoke<T>(cmd: string, args?: Record<string, unknown>): Promi
     return { ...(responses.get_devpulse_config as Record<string, unknown>), ...(args ?? {}) } as T;
   }
   if (cmd === "get_devpulse_secrets_status" || cmd === "update_devpulse_secrets") {
-    return { has_mastodon_token: Boolean(args?.mastodonAccessToken) } as T;
+    return {
+      has_mastodon_token: Boolean(args?.mastodonAccessToken) || cmd === "get_devpulse_secrets_status",
+      has_x_credentials:
+        (Boolean(args?.xApiKey) && Boolean(args?.xApiSecret) && Boolean(args?.xAccessToken) && Boolean(args?.xAccessSecret))
+        || cmd === "get_devpulse_secrets_status",
+    } as T;
   }
   if (cmd === "update_devpulse_sns_config") {
     return {
@@ -1065,6 +1070,7 @@ export interface DevPulseConfigView {
 
 export interface DevPulseSecretsStatusView {
   has_mastodon_token: boolean;
+  has_x_credentials: boolean;
 }
 
 export interface DevPulseRuntimeView {
@@ -1283,9 +1289,19 @@ export function getDevPulseSecretsStatus() {
   return invokeCmd<DevPulseSecretsStatusView>("get_devpulse_secrets_status");
 }
 
-export function updateDevPulseSecrets(opts: { mastodonAccessToken?: string | null }) {
+export function updateDevPulseSecrets(opts: {
+  mastodonAccessToken?: string | null;
+  xApiKey?: string | null;
+  xApiSecret?: string | null;
+  xAccessToken?: string | null;
+  xAccessSecret?: string | null;
+}) {
   return invokeCmd<DevPulseSecretsStatusView>("update_devpulse_secrets", {
     mastodonAccessToken: opts.mastodonAccessToken ?? null,
+    xApiKey: opts.xApiKey ?? null,
+    xApiSecret: opts.xApiSecret ?? null,
+    xAccessToken: opts.xAccessToken ?? null,
+    xAccessSecret: opts.xAccessSecret ?? null,
   });
 }
 

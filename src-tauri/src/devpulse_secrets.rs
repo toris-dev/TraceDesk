@@ -7,6 +7,14 @@ use std::path::PathBuf;
 pub struct DevPulseSecrets {
     #[serde(default)]
     pub mastodon_access_token: String,
+    #[serde(default)]
+    pub x_api_key: String,
+    #[serde(default)]
+    pub x_api_secret: String,
+    #[serde(default)]
+    pub x_access_token: String,
+    #[serde(default)]
+    pub x_access_secret: String,
 }
 
 fn secrets_path() -> PathBuf {
