@@ -342,6 +342,10 @@ export function DevPulseView() {
   const currentTitle = progress?.current_title ?? progress?.current_post_id ?? "-";
   const queuePercent = bundleProgress?.percent ?? 0;
   const dependencies = status?.dependencies ?? [];
+  const dbError =
+    typeof status?.payload.db?.counts?.error === "string" ? status.payload.db.counts.error : null;
+  const runtimeError = status?.runtime.last_error ?? null;
+  const snsRuntimeError = status?.sns_runtime.last_error ?? null;
   const infraRunningCount = (infraStatus?.services ?? []).filter((service) => service.running).length;
   const rootReady = status?.config.root_ready ?? false;
   const setupHint = status?.config.setup_hint || status?.runtime.last_error || t("pulse.setupSaveHint");
@@ -566,6 +570,32 @@ export function DevPulseView() {
         {error && (
           <div className="mt-4 rounded-lg border border-danger/30 bg-danger/10 px-4 py-3 text-sm text-danger-text">
             {error}
+          </div>
+        )}
+
+        {(dbError || runtimeError || snsRuntimeError) && (
+          <div className="mt-4 grid gap-3 xl:grid-cols-3">
+            {dbError && (
+              <StatusAlert
+                title={t("pulse.dbWarningTitle")}
+                message={dbError}
+                tone="amber"
+              />
+            )}
+            {runtimeError && (
+              <StatusAlert
+                title={t("pulse.pipelineWarningTitle")}
+                message={runtimeError}
+                tone="danger"
+              />
+            )}
+            {snsRuntimeError && (
+              <StatusAlert
+                title={t("pulse.snsWarningTitle")}
+                message={snsRuntimeError}
+                tone="amber"
+              />
+            )}
           </div>
         )}
       </section>
@@ -1242,6 +1272,28 @@ function QuickPulseMetric({
       <p className="text-[11px] font-data uppercase tracking-[0.12em] opacity-80">{label}</p>
       <strong className="mt-2 block text-2xl font-semibold">{value}</strong>
     </div>
+  );
+}
+
+function StatusAlert({
+  title,
+  message,
+  tone,
+}: {
+  title: string;
+  message: string;
+  tone: "amber" | "danger";
+}) {
+  const className =
+    tone === "danger"
+      ? "border-danger/30 bg-danger/10 text-danger-text"
+      : "border-amber-500/30 bg-amber-500/10 text-amber-100";
+
+  return (
+    <article className={`rounded-xl border px-4 py-3 ${className}`}>
+      <p className="text-[11px] font-data uppercase tracking-[0.12em] opacity-80">{title}</p>
+      <p className="mt-2 text-sm whitespace-pre-wrap break-words">{message}</p>
+    </article>
   );
 }
 
