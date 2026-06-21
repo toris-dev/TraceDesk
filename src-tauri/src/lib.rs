@@ -175,6 +175,7 @@ pub fn run() {
             devpulse::update_devpulse_settings,
             devpulse::get_devpulse_secrets_status,
             devpulse::update_devpulse_secrets,
+            devpulse::update_devpulse_sns_config,
             devpulse::get_devpulse_status,
             devpulse::get_devpulse_infra_status,
             devpulse::run_devpulse_now,

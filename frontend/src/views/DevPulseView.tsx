@@ -15,6 +15,7 @@ import {
   stopDevPulseSnsDaemon,
   toAssetUrl,
   updateDevPulseSecrets,
+  updateDevPulseSnsConfig,
   updateDevPulseSettings,
   type DevPulseBundleArtifact,
   type DevPulseDbBundle,
@@ -75,6 +76,15 @@ export function DevPulseView() {
   const [snsMode, setSnsMode] = useState("file");
   const [mastodonInstance, setMastodonInstance] = useState("");
   const [mastodonToken, setMastodonToken] = useState("");
+  const [igAppId, setIgAppId] = useState("");
+  const [igUserId, setIgUserId] = useState("");
+  const [igAccessToken, setIgAccessToken] = useState("");
+  const [igPostTimes, setIgPostTimes] = useState("09:00, 14:00, 19:00");
+  const [igReelsPerDay, setIgReelsPerDay] = useState(3);
+  const [igTimezone, setIgTimezone] = useState("Asia/Seoul");
+  const [igPollSec, setIgPollSec] = useState(60);
+  const [igGraphVersion, setIgGraphVersion] = useState("v21.0");
+  const [igDryRun, setIgDryRun] = useState(true);
   const [secretStatus, setSecretStatus] = useState<DevPulseSecretsStatusView | null>(null);
   const [infraStatus, setInfraStatus] = useState<DevPulseInfraStatusView | null>(null);
   const [pickingRoot, setPickingRoot] = useState(false);
@@ -112,6 +122,17 @@ export function DevPulseView() {
       setBundleSize(next.config.bundle_size);
       setSnsMode(next.config.sns_mode);
       setMastodonInstance(next.config.mastodon_instance);
+      const snsConfig = next.payload.sns?.config;
+      if (snsConfig) {
+        setIgAppId(snsConfig.app_id);
+        setIgUserId(snsConfig.user_id);
+        setIgPostTimes(snsConfig.post_times.join(", "));
+        setIgReelsPerDay(snsConfig.reels_per_day);
+        setIgTimezone(snsConfig.timezone);
+        setIgPollSec(snsConfig.poll_sec);
+        setIgGraphVersion(snsConfig.graph_version);
+        setIgDryRun(snsConfig.dry_run);
+      }
     } catch (e) {
       errors.push(formatError(e));
     }
@@ -244,12 +265,40 @@ export function DevPulseView() {
     }
   }
 
+  async function saveSnsConfig() {
+    setSaving(true);
+    try {
+      await updateDevPulseSnsConfig({
+        appId: igAppId,
+        userId: igUserId,
+        accessToken: igAccessToken.trim() || undefined,
+        postTimes: igPostTimes
+          .split(",")
+          .map((value) => value.trim())
+          .filter(Boolean),
+        reelsPerDay: igReelsPerDay,
+        timezone: igTimezone,
+        pollSec: igPollSec,
+        graphVersion: igGraphVersion,
+        dryRun: igDryRun,
+      });
+      setIgAccessToken("");
+      await load();
+    } catch (e) {
+      setError(formatError(e));
+    } finally {
+      setSaving(false);
+    }
+  }
+
   const cards = status?.payload.artifacts?.cards ?? [];
   const bundles = status?.payload.artifacts?.bundles ?? [];
   const dbBundles = status?.payload.db?.recent_bundles ?? [];
   const snsPosts = status?.payload.sns?.recent_posts ?? [];
   const snsStats = status?.payload.sns?.stats;
   const snsRuntime = status?.sns_runtime;
+  const snsIssues = status?.payload.sns?.issues ?? [];
+  const snsConfig = status?.payload.sns?.config;
   const slots = status?.payload.bundle?.slots ?? [];
   const progress = status?.payload.progress;
   const db = status?.payload.db;
@@ -798,6 +847,100 @@ export function DevPulseView() {
           {snsRuntime?.last_error && (
             <div className="mt-3 rounded-lg border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-xs text-amber-200">
               {snsRuntime.last_error}
+            </div>
+          )}
+          <div className="mt-4 grid gap-3 md:grid-cols-2">
+            <label className="space-y-1 text-sm">
+              <span className="text-text-muted">IG_APP_ID</span>
+              <input
+                value={igAppId}
+                onChange={(e) => setIgAppId(e.target.value)}
+                className="w-full rounded-lg border border-border bg-surface px-3 py-2 text-sm"
+              />
+            </label>
+            <label className="space-y-1 text-sm">
+              <span className="text-text-muted">IG_USER_ID</span>
+              <input
+                value={igUserId}
+                onChange={(e) => setIgUserId(e.target.value)}
+                className="w-full rounded-lg border border-border bg-surface px-3 py-2 text-sm"
+              />
+            </label>
+            <label className="space-y-1 text-sm md:col-span-2">
+              <span className="text-text-muted">IG_ACCESS_TOKEN</span>
+              <input
+                type="password"
+                value={igAccessToken}
+                onChange={(e) => setIgAccessToken(e.target.value)}
+                placeholder={snsConfig?.has_access_token ? t("pulse.secretSaved") : ""}
+                className="w-full rounded-lg border border-border bg-surface px-3 py-2 text-sm"
+              />
+            </label>
+            <label className="space-y-1 text-sm">
+              <span className="text-text-muted">IG_POST_TIMES</span>
+              <input
+                value={igPostTimes}
+                onChange={(e) => setIgPostTimes(e.target.value)}
+                className="w-full rounded-lg border border-border bg-surface px-3 py-2 text-sm"
+              />
+            </label>
+            <label className="space-y-1 text-sm">
+              <span className="text-text-muted">IG_REELS_PER_DAY</span>
+              <input
+                type="number"
+                min={1}
+                max={24}
+                value={igReelsPerDay}
+                onChange={(e) => setIgReelsPerDay(Number(e.target.value) || 1)}
+                className="w-full rounded-lg border border-border bg-surface px-3 py-2 text-sm"
+              />
+            </label>
+            <label className="space-y-1 text-sm">
+              <span className="text-text-muted">IG_TIMEZONE</span>
+              <input
+                value={igTimezone}
+                onChange={(e) => setIgTimezone(e.target.value)}
+                className="w-full rounded-lg border border-border bg-surface px-3 py-2 text-sm"
+              />
+            </label>
+            <label className="space-y-1 text-sm">
+              <span className="text-text-muted">IG_POLL_SEC</span>
+              <input
+                type="number"
+                min={10}
+                max={3600}
+                value={igPollSec}
+                onChange={(e) => setIgPollSec(Number(e.target.value) || 10)}
+                className="w-full rounded-lg border border-border bg-surface px-3 py-2 text-sm"
+              />
+            </label>
+            <label className="space-y-1 text-sm">
+              <span className="text-text-muted">IG_GRAPH_VERSION</span>
+              <input
+                value={igGraphVersion}
+                onChange={(e) => setIgGraphVersion(e.target.value)}
+                className="w-full rounded-lg border border-border bg-surface px-3 py-2 text-sm"
+              />
+            </label>
+            <label className="flex items-center gap-2 rounded-lg border border-border/70 bg-surface/60 px-3 py-2 text-sm">
+              <input type="checkbox" checked={igDryRun} onChange={(e) => setIgDryRun(e.target.checked)} />
+              <span>IG_DRY_RUN</span>
+            </label>
+          </div>
+          <div className="mt-3 flex items-center justify-between gap-3">
+            <p className="text-xs text-text-muted">{snsConfig?.has_access_token ? t("pulse.secretSaved") : t("pulse.secretMissing")}</p>
+            <button
+              type="button"
+              onClick={() => void saveSnsConfig()}
+              disabled={saving || !rootReady}
+              className="rounded-lg bg-accent px-3 py-2 text-sm text-accent-foreground disabled:opacity-50"
+            >
+              {saving ? t("common.saving") : t("pulse.save")}
+            </button>
+          </div>
+          {snsIssues.length > 0 && (
+            <div className="mt-3 rounded-lg border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-xs text-amber-200">
+              {snsIssues.join(" · ")}
             </div>
           )}
           <div className="mt-4 flex flex-wrap gap-2">

@@ -151,6 +151,33 @@ pub struct DevPulseSecretsStatusView {
     pub has_mastodon_token: bool,
 }
 
+#[derive(Debug, Clone, Serialize)]
+pub struct DevPulseSnsConfigView {
+    pub app_id: String,
+    pub user_id: String,
+    pub has_access_token: bool,
+    pub post_times: Vec<String>,
+    pub reels_per_day: u32,
+    pub timezone: String,
+    pub poll_sec: u32,
+    pub graph_version: String,
+    pub dry_run: bool,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct UpdateDevPulseSnsConfigArgs {
+    pub app_id: Option<String>,
+    pub user_id: Option<String>,
+    pub access_token: Option<String>,
+    pub post_times: Option<Vec<String>>,
+    pub reels_per_day: Option<u32>,
+    pub timezone: Option<String>,
+    pub poll_sec: Option<u32>,
+    pub graph_version: Option<String>,
+    pub dry_run: Option<bool>,
+}
+
 fn fallback_root_candidates() -> Vec<PathBuf> {
     let cwd = std::env::current_dir().unwrap_or_else(|_| PathBuf::from("."));
     let mut candidates = vec![cwd.join("../devPulse"), cwd.join("devPulse")];
@@ -231,6 +258,14 @@ fn output_dir(root: &Path) -> PathBuf {
 
 fn infra_dir(root: &Path) -> PathBuf {
     root.join("infra")
+}
+
+fn instagram_env_path(root: &Path) -> PathBuf {
+    infra_dir(root).join(".env.instagram")
+}
+
+fn instagram_env_example_path(root: &Path) -> PathBuf {
+    infra_dir(root).join(".env.instagram.example")
 }
 
 fn bridge_pythonpath(app: &AppHandle) -> Option<PathBuf> {
@@ -403,17 +438,27 @@ fn resolve_data_path(root: &Path, raw: &str) -> PathBuf {
     }
 }
 
-fn instagram_state_db_path(root: &Path) -> PathBuf {
-    let env_entries = read_devpulse_env(root);
-    env_lookup(&env_entries, "IG_STATE_DB")
-        .map(|raw| resolve_data_path(root, &raw))
-        .unwrap_or_else(|| output_dir(root).join("instagram").join("state.db"))
+fn instagram_env_map(root: &Path) -> Vec<(String, String)> {
+    let path = instagram_env_path(root);
+    if let Ok(raw) = fs::read_to_string(&path) {
+        raw.lines()
+            .map(str::trim)
+            .filter(|line| !line.is_empty() && !line.starts_with('#'))
+            .filter_map(|line| line.split_once('='))
+            .map(|(key, value)| {
+                (
+                    key.trim().to_string(),
+                    value.trim().trim_matches('"').trim_matches('\'').to_string(),
+                )
+            })
+            .collect()
+    } else {
+        Vec::new()
+    }
 }
 
-fn build_instagram_status(root: &Path) -> Value {
+fn build_instagram_config_view(root: &Path) -> DevPulseSnsConfigView {
     let env_entries = read_devpulse_env(root);
-    let state_db = instagram_state_db_path(root);
-    let timezone = env_lookup(&env_entries, "IG_TIMEZONE").unwrap_or_else(|| "Asia/Seoul".to_string());
     let post_times = env_lookup(&env_entries, "IG_POST_TIMES")
         .map(|raw| {
             raw.split(',')
@@ -423,17 +468,102 @@ fn build_instagram_status(root: &Path) -> Value {
                 .collect::<Vec<_>>()
         })
         .unwrap_or_else(|| vec!["09:00".to_string(), "14:00".to_string(), "19:00".to_string()]);
-    let reels_per_day = env_lookup(&env_entries, "IG_REELS_PER_DAY")
-        .and_then(|value| value.parse::<u32>().ok())
-        .unwrap_or(3);
+    DevPulseSnsConfigView {
+        app_id: env_lookup(&env_entries, "IG_APP_ID").unwrap_or_default(),
+        user_id: env_lookup(&env_entries, "IG_USER_ID").unwrap_or_default(),
+        has_access_token: env_lookup(&env_entries, "IG_ACCESS_TOKEN")
+            .map(|value| !value.trim().is_empty())
+            .unwrap_or(false),
+        post_times,
+        reels_per_day: env_lookup(&env_entries, "IG_REELS_PER_DAY")
+            .and_then(|value| value.parse::<u32>().ok())
+            .unwrap_or(1),
+        timezone: env_lookup(&env_entries, "IG_TIMEZONE").unwrap_or_else(|| "Asia/Seoul".to_string()),
+        poll_sec: env_lookup(&env_entries, "IG_POLL_SEC")
+            .and_then(|value| value.parse::<u32>().ok())
+            .unwrap_or(60),
+        graph_version: env_lookup(&env_entries, "IG_GRAPH_VERSION").unwrap_or_else(|| "v21.0".to_string()),
+        dry_run: env_lookup(&env_entries, "IG_DRY_RUN")
+            .map(|value| matches!(value.to_ascii_lowercase().as_str(), "1" | "true" | "yes"))
+            .unwrap_or(true),
+    }
+}
+
+fn write_instagram_env(root: &Path, updates: &[(String, String)]) -> Result<(), String> {
+    let path = instagram_env_path(root);
+    let example = instagram_env_example_path(root);
+    let mut contents = if path.exists() {
+        fs::read_to_string(&path).map_err(|e| format!("failed to read .env.instagram: {e}"))?
+    } else if example.exists() {
+        fs::read_to_string(&example).map_err(|e| format!("failed to read .env.instagram.example: {e}"))?
+    } else {
+        String::new()
+    };
+
+    for (key, value) in updates {
+        let replacement = format!("{key}={value}");
+        let mut replaced = false;
+        let mut next_lines = Vec::new();
+        for line in contents.lines() {
+            if line.trim_start().starts_with(&format!("{key}=")) {
+                next_lines.push(replacement.clone());
+                replaced = true;
+            } else {
+                next_lines.push(line.to_string());
+            }
+        }
+        if !replaced {
+            if !next_lines.is_empty() && !next_lines.last().is_some_and(|line| line.is_empty()) {
+                next_lines.push(String::new());
+            }
+            next_lines.push(replacement);
+        }
+        contents = next_lines.join("\n");
+        if !contents.ends_with('\n') {
+            contents.push('\n');
+        }
+    }
+
+    fs::write(path, contents).map_err(|e| format!("failed to write .env.instagram: {e}"))
+}
+
+fn instagram_state_db_path(root: &Path) -> PathBuf {
+    let env_entries = read_devpulse_env(root);
+    env_lookup(&env_entries, "IG_STATE_DB")
+        .map(|raw| resolve_data_path(root, &raw))
+        .unwrap_or_else(|| output_dir(root).join("instagram").join("state.db"))
+}
+
+fn build_instagram_status(root: &Path) -> Value {
+    let config = build_instagram_config_view(root);
+    let state_db = instagram_state_db_path(root);
+    let timezone = config.timezone.clone();
+    let post_times = config.post_times.clone();
+    let reels_per_day = config.reels_per_day;
+    let mut issues: Vec<String> = Vec::new();
+    if config.app_id.trim().is_empty() {
+        issues.push("IG_APP_ID missing".to_string());
+    } else if !config.app_id.chars().all(|c| c.is_ascii_digit()) {
+        issues.push("IG_APP_ID must be numeric".to_string());
+    }
+    if config.user_id.trim().is_empty() {
+        issues.push("IG_USER_ID missing".to_string());
+    } else if !config.user_id.chars().all(|c| c.is_ascii_digit()) {
+        issues.push("IG_USER_ID must be numeric".to_string());
+    }
+    if !config.has_access_token {
+        issues.push("IG_ACCESS_TOKEN missing".to_string());
+    }
 
     if !state_db.exists() {
         return serde_json::json!({
             "configured": false,
+            "config": config,
             "state_db": state_db.display().to_string(),
             "timezone": timezone,
             "post_times": post_times,
             "reels_per_day": reels_per_day,
+            "issues": issues,
             "stats": { "total": 0, "posted": 0, "failed": 0 },
             "daily_counts": [],
             "recent_posts": [],
@@ -443,10 +573,12 @@ fn build_instagram_status(root: &Path) -> Value {
     let Ok(conn) = Connection::open(&state_db) else {
         return serde_json::json!({
             "configured": true,
+            "config": config,
             "state_db": state_db.display().to_string(),
             "timezone": timezone,
             "post_times": post_times,
             "reels_per_day": reels_per_day,
+            "issues": issues,
             "stats": { "total": 0, "posted": 0, "failed": 0 },
             "daily_counts": [],
             "recent_posts": [],
@@ -522,10 +654,12 @@ fn build_instagram_status(root: &Path) -> Value {
 
     serde_json::json!({
         "configured": true,
+        "config": config,
         "state_db": state_db.display().to_string(),
         "timezone": timezone,
         "post_times": post_times,
         "reels_per_day": reels_per_day,
+        "issues": issues,
         "stats": stats,
         "daily_counts": daily_counts,
         "recent_posts": recent_posts,
@@ -1331,6 +1465,66 @@ pub fn update_devpulse_secrets(
     Ok(DevPulseSecretsStatusView {
         has_mastodon_token: has_mastodon_token(),
     })
+}
+
+#[tauri::command]
+pub fn update_devpulse_sns_config(
+    settings_state: State<SettingsState>,
+    args: UpdateDevPulseSnsConfigArgs,
+) -> Result<DevPulseSnsConfigView, String> {
+    let settings = settings_state.0.read().map_err(|e| e.to_string())?.clone();
+    let root = resolve_root(&settings)?;
+    let current = build_instagram_config_view(&root);
+    let updates = vec![
+        ("IG_APP_ID".to_string(), args.app_id.unwrap_or(current.app_id)),
+        ("IG_USER_ID".to_string(), args.user_id.unwrap_or(current.user_id)),
+        (
+            "IG_ACCESS_TOKEN".to_string(),
+            args.access_token
+                .map(|value| value.trim().to_string())
+                .filter(|value| !value.is_empty())
+                .unwrap_or_else(|| {
+                    if current.has_access_token {
+                        instagram_env_map(&root)
+                            .into_iter()
+                            .find(|(key, _)| key == "IG_ACCESS_TOKEN")
+                            .map(|(_, value)| value)
+                            .unwrap_or_default()
+                    } else {
+                        String::new()
+                    }
+                }),
+        ),
+        (
+            "IG_POST_TIMES".to_string(),
+            args.post_times
+                .unwrap_or(current.post_times)
+                .into_iter()
+                .map(|item| item.trim().to_string())
+                .filter(|item| !item.is_empty())
+                .collect::<Vec<_>>()
+                .join(","),
+        ),
+        (
+            "IG_REELS_PER_DAY".to_string(),
+            args.reels_per_day.unwrap_or(current.reels_per_day).clamp(1, 24).to_string(),
+        ),
+        ("IG_TIMEZONE".to_string(), args.timezone.unwrap_or(current.timezone)),
+        (
+            "IG_POLL_SEC".to_string(),
+            args.poll_sec.unwrap_or(current.poll_sec).clamp(10, 3600).to_string(),
+        ),
+        (
+            "IG_GRAPH_VERSION".to_string(),
+            args.graph_version.unwrap_or(current.graph_version),
+        ),
+        (
+            "IG_DRY_RUN".to_string(),
+            if args.dry_run.unwrap_or(current.dry_run) { "1" } else { "0" }.to_string(),
+        ),
+    ];
+    write_instagram_env(&root, &updates)?;
+    Ok(build_instagram_config_view(&root))
 }
 
 fn has_mastodon_token() -> bool {

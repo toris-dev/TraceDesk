@@ -602,10 +602,22 @@ async function mockInvoke<T>(cmd: string, args?: Record<string, unknown>): Promi
         },
         sns: {
           configured: true,
+          config: {
+            app_id: "123456789012345",
+            user_id: "17841400000000000",
+            has_access_token: true,
+            post_times: ["09:00", "14:00", "19:00"],
+            reels_per_day: 3,
+            timezone: "Asia/Seoul",
+            poll_sec: 60,
+            graph_version: "v21.0",
+            dry_run: true,
+          },
           state_db: "/Users/toris/projects/devPulse/output/instagram/state.db",
           timezone: "Asia/Seoul",
           post_times: ["09:00", "14:00", "19:00"],
           reels_per_day: 3,
+          issues: [],
           stats: {
             total: 4,
             posted: 3,
@@ -670,6 +682,19 @@ async function mockInvoke<T>(cmd: string, args?: Record<string, unknown>): Promi
   }
   if (cmd === "get_devpulse_secrets_status" || cmd === "update_devpulse_secrets") {
     return { has_mastodon_token: Boolean(args?.mastodonAccessToken) } as T;
+  }
+  if (cmd === "update_devpulse_sns_config") {
+    return {
+      app_id: String(args?.appId ?? "123456789012345"),
+      user_id: String(args?.userId ?? "17841400000000000"),
+      has_access_token: args?.accessToken ? String(args.accessToken).trim().length > 0 : true,
+      post_times: Array.isArray(args?.postTimes) ? (args.postTimes as string[]) : ["09:00", "14:00", "19:00"],
+      reels_per_day: Number(args?.reelsPerDay ?? 3),
+      timezone: String(args?.timezone ?? "Asia/Seoul"),
+      poll_sec: Number(args?.pollSec ?? 60),
+      graph_version: String(args?.graphVersion ?? "v21.0"),
+      dry_run: Boolean(args?.dryRun ?? true),
+    } as T;
   }
   if (cmd === "get_devpulse_infra_status" || cmd === "start_devpulse_infra" || cmd === "stop_devpulse_infra") {
     return responses.get_devpulse_infra_status as T;
@@ -1122,6 +1147,18 @@ export interface DevPulseSnsPostRecord {
   content_key?: string | null;
 }
 
+export interface DevPulseSnsConfigView {
+  app_id: string;
+  user_id: string;
+  has_access_token: boolean;
+  post_times: string[];
+  reels_per_day: number;
+  timezone: string;
+  poll_sec: number;
+  graph_version: string;
+  dry_run: boolean;
+}
+
 export interface DevPulseStatusView {
   config: DevPulseConfigView;
   runtime: DevPulseRuntimeView;
@@ -1180,10 +1217,12 @@ export interface DevPulseStatusView {
     };
     sns?: {
       configured?: boolean;
+      config?: DevPulseSnsConfigView;
       state_db?: string;
       timezone?: string;
       post_times?: string[];
       reels_per_day?: number;
+      issues?: string[];
       stats?: {
         total?: number;
         posted?: number;
@@ -1238,6 +1277,30 @@ export function getDevPulseSecretsStatus() {
 export function updateDevPulseSecrets(opts: { mastodonAccessToken?: string | null }) {
   return invokeCmd<DevPulseSecretsStatusView>("update_devpulse_secrets", {
     mastodonAccessToken: opts.mastodonAccessToken ?? null,
+  });
+}
+
+export function updateDevPulseSnsConfig(opts: {
+  appId?: string;
+  userId?: string;
+  accessToken?: string;
+  postTimes?: string[];
+  reelsPerDay?: number;
+  timezone?: string;
+  pollSec?: number;
+  graphVersion?: string;
+  dryRun?: boolean;
+}) {
+  return invokeCmd<DevPulseSnsConfigView>("update_devpulse_sns_config", {
+    appId: opts.appId ?? null,
+    userId: opts.userId ?? null,
+    accessToken: opts.accessToken ?? null,
+    postTimes: opts.postTimes ?? null,
+    reelsPerDay: opts.reelsPerDay ?? null,
+    timezone: opts.timezone ?? null,
+    pollSec: opts.pollSec ?? null,
+    graphVersion: opts.graphVersion ?? null,
+    dryRun: opts.dryRun ?? null,
   });
 }
 
