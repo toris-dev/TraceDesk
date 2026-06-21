@@ -6,6 +6,7 @@ use crate::settings::{
 use crate::settings_commands::SettingsState;
 use chrono::{Datelike, Local, Timelike};
 use reqwest::Url;
+use rusqlite::Connection;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::env;
@@ -321,19 +322,21 @@ fn build_runtime_view(runtime: &mut DevPulseRuntime) -> DevPulseRuntimeView {
 }
 
 fn read_devpulse_env(root: &Path) -> Vec<(String, String)> {
-    let env_path = root.join("infra").join(".env");
-    let Ok(raw) = fs::read_to_string(env_path) else {
-        return Vec::new();
-    };
-    raw.lines()
-        .map(str::trim)
-        .filter(|line| !line.is_empty() && !line.starts_with('#'))
-        .filter_map(|line| line.split_once('='))
-        .map(|(key, value)| {
-            (
-                key.trim().to_string(),
-                value.trim().trim_matches('"').trim_matches('\'').to_string(),
-            )
+    [root.join("infra").join(".env"), root.join("infra").join(".env.instagram")]
+        .into_iter()
+        .filter_map(|path| fs::read_to_string(path).ok())
+        .flat_map(|raw| {
+            raw.lines()
+                .map(str::trim)
+                .filter(|line| !line.is_empty() && !line.starts_with('#'))
+                .filter_map(|line| line.split_once('='))
+                .map(|(key, value)| {
+                    (
+                        key.trim().to_string(),
+                        value.trim().trim_matches('"').trim_matches('\'').to_string(),
+                    )
+                })
+                .collect::<Vec<_>>()
         })
         .collect()
 }
@@ -341,8 +344,147 @@ fn read_devpulse_env(root: &Path) -> Vec<(String, String)> {
 fn env_lookup(entries: &[(String, String)], key: &str) -> Option<String> {
     entries
         .iter()
+        .rev()
         .find(|(entry_key, _)| entry_key == key)
         .map(|(_, value)| value.clone())
+}
+
+fn resolve_data_path(root: &Path, raw: &str) -> PathBuf {
+    let path = PathBuf::from(raw);
+    if path.is_absolute() {
+        path
+    } else {
+        root.join(path)
+    }
+}
+
+fn instagram_state_db_path(root: &Path) -> PathBuf {
+    let env_entries = read_devpulse_env(root);
+    env_lookup(&env_entries, "IG_STATE_DB")
+        .map(|raw| resolve_data_path(root, &raw))
+        .unwrap_or_else(|| output_dir(root).join("instagram").join("state.db"))
+}
+
+fn build_instagram_status(root: &Path) -> Value {
+    let env_entries = read_devpulse_env(root);
+    let state_db = instagram_state_db_path(root);
+    let timezone = env_lookup(&env_entries, "IG_TIMEZONE").unwrap_or_else(|| "Asia/Seoul".to_string());
+    let post_times = env_lookup(&env_entries, "IG_POST_TIMES")
+        .map(|raw| {
+            raw.split(',')
+                .map(str::trim)
+                .filter(|item| !item.is_empty())
+                .map(ToOwned::to_owned)
+                .collect::<Vec<_>>()
+        })
+        .unwrap_or_else(|| vec!["09:00".to_string(), "14:00".to_string(), "19:00".to_string()]);
+    let reels_per_day = env_lookup(&env_entries, "IG_REELS_PER_DAY")
+        .and_then(|value| value.parse::<u32>().ok())
+        .unwrap_or(3);
+
+    if !state_db.exists() {
+        return serde_json::json!({
+            "configured": false,
+            "state_db": state_db.display().to_string(),
+            "timezone": timezone,
+            "post_times": post_times,
+            "reels_per_day": reels_per_day,
+            "stats": { "total": 0, "posted": 0, "failed": 0 },
+            "daily_counts": [],
+            "recent_posts": [],
+        });
+    }
+
+    let Ok(conn) = Connection::open(&state_db) else {
+        return serde_json::json!({
+            "configured": true,
+            "state_db": state_db.display().to_string(),
+            "timezone": timezone,
+            "post_times": post_times,
+            "reels_per_day": reels_per_day,
+            "stats": { "total": 0, "posted": 0, "failed": 0 },
+            "daily_counts": [],
+            "recent_posts": [],
+            "error": "failed to open instagram poster state db",
+        });
+    };
+
+    let stats = conn
+        .query_row(
+            "
+            SELECT
+              COUNT(*) AS total,
+              SUM(CASE WHEN ig_media_id IS NOT NULL THEN 1 ELSE 0 END) AS posted,
+              SUM(CASE WHEN error IS NOT NULL AND error <> '' THEN 1 ELSE 0 END) AS failed
+            FROM ig_posts
+            ",
+            [],
+            |row| {
+                Ok(serde_json::json!({
+                    "total": row.get::<_, i64>(0).unwrap_or(0),
+                    "posted": row.get::<_, i64>(1).unwrap_or(0),
+                    "failed": row.get::<_, i64>(2).unwrap_or(0),
+                }))
+            },
+        )
+        .unwrap_or_else(|_| serde_json::json!({ "total": 0, "posted": 0, "failed": 0 }));
+
+    let mut daily_counts = Vec::new();
+    if let Ok(mut stmt) = conn.prepare(
+        "
+        SELECT day, kind, count
+        FROM ig_daily
+        ORDER BY day DESC, kind ASC
+        LIMIT 14
+        ",
+    ) {
+        if let Ok(rows) = stmt.query_map([], |row| {
+            Ok(serde_json::json!({
+                "day": row.get::<_, String>(0).unwrap_or_default(),
+                "kind": row.get::<_, String>(1).unwrap_or_default(),
+                "count": row.get::<_, i64>(2).unwrap_or(0),
+            }))
+        }) {
+            daily_counts = rows.flatten().collect::<Vec<_>>();
+        }
+    }
+
+    let mut recent_posts = Vec::new();
+    if let Ok(mut stmt) = conn.prepare(
+        "
+        SELECT bundle_id, kind, ig_media_id, posted_at, error, content_key
+        FROM ig_posts
+        ORDER BY
+          CASE WHEN posted_at IS NULL OR posted_at = '' THEN 1 ELSE 0 END,
+          posted_at DESC,
+          bundle_id DESC
+        LIMIT 20
+        ",
+    ) {
+        if let Ok(rows) = stmt.query_map([], |row| {
+            Ok(serde_json::json!({
+                "bundle_id": row.get::<_, String>(0).unwrap_or_default(),
+                "kind": row.get::<_, String>(1).unwrap_or_default(),
+                "ig_media_id": row.get::<_, Option<String>>(2).unwrap_or(None),
+                "posted_at": row.get::<_, Option<String>>(3).unwrap_or(None),
+                "error": row.get::<_, Option<String>>(4).unwrap_or(None),
+                "content_key": row.get::<_, Option<String>>(5).unwrap_or(None),
+            }))
+        }) {
+            recent_posts = rows.flatten().collect::<Vec<_>>();
+        }
+    }
+
+    serde_json::json!({
+        "configured": true,
+        "state_db": state_db.display().to_string(),
+        "timezone": timezone,
+        "post_times": post_times,
+        "reels_per_day": reels_per_day,
+        "stats": stats,
+        "daily_counts": daily_counts,
+        "recent_posts": recent_posts,
+    })
 }
 
 fn probe_socket(host: &str, port: u16) -> Result<(), String> {
@@ -1150,6 +1292,10 @@ pub fn get_devpulse_status(
             empty_dashboard_payload()
         }
     };
+    let mut payload = payload;
+    if let Value::Object(map) = &mut payload {
+        map.insert("sns".to_string(), build_instagram_status(&root));
+    }
 
     Ok(DevPulseStatusView {
         config: build_config_view(&settings, Some(&root)),

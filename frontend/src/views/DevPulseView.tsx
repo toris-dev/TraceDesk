@@ -223,6 +223,8 @@ export function DevPulseView() {
   const cards = status?.payload.artifacts?.cards ?? [];
   const bundles = status?.payload.artifacts?.bundles ?? [];
   const dbBundles = status?.payload.db?.recent_bundles ?? [];
+  const snsPosts = status?.payload.sns?.recent_posts ?? [];
+  const snsStats = status?.payload.sns?.stats;
   const slots = status?.payload.bundle?.slots ?? [];
   const progress = status?.payload.progress;
   const db = status?.payload.db;
@@ -249,6 +251,7 @@ export function DevPulseView() {
   const cardCount = counts?.cards ?? db?.counts?.card_generated ?? 0;
   const videoCount = counts?.bundles ?? db?.bundle_total ?? 0;
   const snsCount = progress?.total_published ?? db?.counts?.published ?? 0;
+  const bundleById = new Map(bundles.map((bundle) => [bundle.bundle_id, bundle]));
 
   return (
     <div className="space-y-6 max-w-[1480px]">
@@ -727,7 +730,43 @@ export function DevPulseView() {
         </div>
       </section>
 
-      <section id="pulse-uploads" className="grid gap-6 xl:grid-cols-[1.05fr_0.95fr] scroll-mt-24">
+      <section id="pulse-uploads" className="grid gap-6 xl:grid-cols-3 scroll-mt-24">
+        <div className="td-panel p-6">
+          <div className="flex items-center justify-between gap-3">
+            <div>
+              <h3 className="text-lg font-display text-[var(--cyber-cyan)]">{t("pulse.snsDeliveryTitle")}</h3>
+              <p className="text-sm text-text-muted">{t("pulse.snsDeliveryDesc")}</p>
+            </div>
+            <strong className="text-sm text-text-muted">{snsStats?.posted ?? 0}</strong>
+          </div>
+          <div className="mt-4 flex flex-wrap gap-2">
+            <span className="rounded-full border border-emerald-500/30 bg-emerald-500/10 px-3 py-1 text-[11px] font-data text-emerald-300">
+              {t("pulse.snsPosted")} {snsStats?.posted ?? 0}
+            </span>
+            <span className="rounded-full border border-amber-500/30 bg-amber-500/10 px-3 py-1 text-[11px] font-data text-amber-300">
+              {t("pulse.snsFailed")} {snsStats?.failed ?? 0}
+            </span>
+            <span className="rounded-full border border-border/70 bg-surface px-3 py-1 text-[11px] font-data text-text-muted">
+              {t("pulse.snsQueue")} {snsStats?.total ?? 0}
+            </span>
+          </div>
+          <div className="mt-4 space-y-3">
+            {snsPosts.length === 0 && (
+              <p className="text-sm text-text-muted">
+                {status?.payload.sns?.configured ? t("pulse.snsDeliveryEmpty") : t("pulse.snsDeliverySetup")}
+              </p>
+            )}
+            {snsPosts.slice(0, 6).map((post) => (
+              <SnsDeliveryRow
+                key={`${post.bundle_id}-${post.kind}`}
+                post={post}
+                bundle={bundleById.get(post.bundle_id)}
+                t={t}
+              />
+            ))}
+          </div>
+        </div>
+
         <div className="td-panel p-6">
           <div className="flex items-center justify-between gap-3">
             <div>
@@ -921,6 +960,87 @@ function BundleUploadRow({
         </div>
       </div>
       {bundle.caption && <p className="mt-3 line-clamp-3 whitespace-pre-wrap text-sm text-text-muted">{bundle.caption}</p>}
+    </article>
+  );
+}
+
+function SnsDeliveryRow({
+  post,
+  bundle,
+  t,
+}: {
+  post: {
+    bundle_id: string;
+    kind: string;
+    ig_media_id?: string | null;
+    posted_at?: string | null;
+    error?: string | null;
+  };
+  bundle?: DevPulseBundleArtifact;
+  t: (key: string) => string;
+}) {
+  const state = post.ig_media_id ? "posted" : post.error ? "failed" : "pending";
+  const badgeClass =
+    state === "posted"
+      ? "border-emerald-500/30 bg-emerald-500/10 text-emerald-300"
+      : state === "failed"
+        ? "border-amber-500/30 bg-amber-500/10 text-amber-300"
+        : "border-border/70 bg-surface text-text-muted";
+
+  return (
+    <article className="rounded-xl border border-border/70 bg-surface/60 p-4">
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div className="min-w-0">
+          <h4 className="truncate font-display text-base text-text">{post.bundle_id}</h4>
+          <p className="mt-1 text-sm text-text-muted">
+            {post.kind} · {fmt(post.posted_at)}
+          </p>
+          <p className="mt-1 text-xs text-text-muted">
+            {post.ig_media_id ? `IG ${post.ig_media_id}` : post.error || t("pulse.snsPending")}
+          </p>
+        </div>
+        <div className={`rounded-full border px-2.5 py-1 text-[11px] font-data ${badgeClass}`}>
+          {state === "posted"
+            ? t("pulse.snsPosted")
+            : state === "failed"
+              ? t("pulse.snsFailed")
+              : t("pulse.snsPending")}
+        </div>
+      </div>
+      {bundle && (
+        <div className="mt-3 flex flex-wrap gap-2 text-xs">
+          {bundle.video_url && (
+            <a
+              className="rounded-lg border border-border px-2 py-1 text-text-muted hover:border-[var(--cyber-cyan)]"
+              href={toAssetUrl(bundle.video_url) ?? undefined}
+              target="_blank"
+              rel="noreferrer"
+            >
+              {t("pulse.openVideo")}
+            </a>
+          )}
+          {bundle.json_url && (
+            <a
+              className="rounded-lg border border-border px-2 py-1 text-text-muted hover:border-[var(--cyber-cyan)]"
+              href={toAssetUrl(bundle.json_url) ?? undefined}
+              target="_blank"
+              rel="noreferrer"
+            >
+              {t("pulse.openJson")}
+            </a>
+          )}
+          {bundle.caption_url && (
+            <a
+              className="rounded-lg border border-border px-2 py-1 text-text-muted hover:border-[var(--cyber-cyan)]"
+              href={toAssetUrl(bundle.caption_url) ?? undefined}
+              target="_blank"
+              rel="noreferrer"
+            >
+              {t("pulse.openCaption")}
+            </a>
+          )}
+        </div>
+      )}
     </article>
   );
 }

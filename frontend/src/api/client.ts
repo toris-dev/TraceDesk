@@ -592,6 +592,40 @@ async function mockInvoke<T>(cmd: string, args?: Record<string, unknown>): Promi
           tail: ["[21:49] idle", "[21:50] waiting next cycle"],
           log_file: "output/daemon.log",
         },
+        sns: {
+          configured: true,
+          state_db: "/Users/toris/projects/devPulse/output/instagram/state.db",
+          timezone: "Asia/Seoul",
+          post_times: ["09:00", "14:00", "19:00"],
+          reels_per_day: 3,
+          stats: {
+            total: 4,
+            posted: 3,
+            failed: 1,
+          },
+          daily_counts: [
+            { day: "2026-06-19", kind: "reel", count: 2 },
+            { day: "2026-06-18", kind: "reel", count: 1 },
+          ],
+          recent_posts: [
+            {
+              bundle_id: "bundle-20260619-01",
+              kind: "reel",
+              ig_media_id: "17890000000000001",
+              posted_at: "2026-06-19T21:12:00+09:00",
+              error: null,
+              content_key: "posts:post-1,post-2,post-3,post-4,post-5,post-6",
+            },
+            {
+              bundle_id: "bundle-20260618-02",
+              kind: "reel",
+              ig_media_id: null,
+              posted_at: null,
+              error: "media processing failed",
+              content_key: "posts:post-7,post-8,post-9,post-10,post-11,post-12",
+            },
+          ],
+        },
         generated_at: "2026-06-19T21:50:00+09:00",
       },
     } satisfies DevPulseStatusView,
@@ -1043,6 +1077,21 @@ export interface DevPulseDbBundle {
   created_at: string;
 }
 
+export interface DevPulseSnsDailyCount {
+  day: string;
+  kind: string;
+  count: number;
+}
+
+export interface DevPulseSnsPostRecord {
+  bundle_id: string;
+  kind: string;
+  ig_media_id?: string | null;
+  posted_at?: string | null;
+  error?: string | null;
+  content_key?: string | null;
+}
+
 export interface DevPulseStatusView {
   config: DevPulseConfigView;
   runtime: DevPulseRuntimeView;
@@ -1097,6 +1146,21 @@ export interface DevPulseStatusView {
     logs?: {
       tail?: string[];
       log_file?: string;
+    };
+    sns?: {
+      configured?: boolean;
+      state_db?: string;
+      timezone?: string;
+      post_times?: string[];
+      reels_per_day?: number;
+      stats?: {
+        total?: number;
+        posted?: number;
+        failed?: number;
+      };
+      daily_counts?: DevPulseSnsDailyCount[];
+      recent_posts?: DevPulseSnsPostRecord[];
+      error?: string;
     };
     generated_at?: string;
   };
