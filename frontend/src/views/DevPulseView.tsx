@@ -219,7 +219,7 @@ export function DevPulseView() {
         setXAccessToken("");
         setXAccessSecret("");
       }
-      await load();
+      void load();
     } catch (e) {
       setError(formatError(e));
     } finally {

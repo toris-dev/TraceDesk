@@ -13,8 +13,9 @@ use std::env;
 use std::fs;
 use std::net::{SocketAddr, TcpStream, ToSocketAddrs};
 use std::path::{Path, PathBuf};
-use std::process::{Child, Command, Stdio};
+use std::process::{Child, Command, Output, Stdio};
 use std::sync::{Arc, Mutex};
+use std::thread;
 use std::time::Duration;
 use tauri::{AppHandle, Manager, State};
 use tauri_plugin_dialog::DialogExt;
@@ -33,6 +34,9 @@ print(json.dumps(build_dashboard_payload(), ensure_ascii=False, default=str))
 "#;
 
 const INFRA_SERVICES: &[&str] = &["postgres", "redis", "minio", "qdrant"];
+const DOCKER_PROBE_TIMEOUT: Duration = Duration::from_secs(2);
+const STATUS_COMMAND_TIMEOUT: Duration = Duration::from_secs(8);
+const CLI_COMMAND_TIMEOUT: Duration = Duration::from_secs(120);
 
 #[derive(Clone, Default)]
 pub struct DevPulseState(pub Arc<Mutex<DevPulseRuntime>>);
@@ -800,45 +804,43 @@ fn build_dependency_views(root: &Path, settings: &AppSettings) -> Vec<DevPulseDe
 }
 
 fn docker_available() -> Result<(), String> {
-    Command::new("docker")
-        .arg("--version")
+    let mut cmd = Command::new("docker");
+    cmd.arg("--version")
         .stdout(Stdio::null())
-        .stderr(Stdio::piped())
-        .output()
-        .map_err(|e| format!("docker not found: {e}"))
-        .and_then(|output| {
-            if output.status.success() {
-                Ok(())
+        .stderr(Stdio::piped());
+
+    run_command_output(cmd, DOCKER_PROBE_TIMEOUT, "docker --version").and_then(|output| {
+        if output.status.success() {
+            Ok(())
+        } else {
+            let stderr = String::from_utf8_lossy(&output.stderr).trim().to_string();
+            Err(if stderr.is_empty() {
+                "docker --version failed".to_string()
             } else {
-                let stderr = String::from_utf8_lossy(&output.stderr).trim().to_string();
-                Err(if stderr.is_empty() {
-                    "docker --version failed".to_string()
-                } else {
-                    stderr
-                })
-            }
-        })
+                stderr
+            })
+        }
+    })
 }
 
 fn docker_daemon_ready() -> Result<(), String> {
-    Command::new("docker")
-        .arg("info")
+    let mut cmd = Command::new("docker");
+    cmd.arg("info")
         .stdout(Stdio::null())
-        .stderr(Stdio::piped())
-        .output()
-        .map_err(|e| format!("docker info failed: {e}"))
-        .and_then(|output| {
-            if output.status.success() {
-                Ok(())
+        .stderr(Stdio::piped());
+
+    run_command_output(cmd, DOCKER_PROBE_TIMEOUT, "docker info").and_then(|output| {
+        if output.status.success() {
+            Ok(())
+        } else {
+            let stderr = String::from_utf8_lossy(&output.stderr).trim().to_string();
+            Err(if stderr.is_empty() {
+                "docker daemon is not ready".to_string()
             } else {
-                let stderr = String::from_utf8_lossy(&output.stderr).trim().to_string();
-                Err(if stderr.is_empty() {
-                    "docker daemon is not ready".to_string()
-                } else {
-                    stderr
-                })
-            }
-        })
+                stderr
+            })
+        }
+    })
 }
 
 fn docker_compose_command(root: &Path) -> Command {
@@ -1154,9 +1156,7 @@ fn run_status_payload(
         .stderr(Stdio::piped());
     configure_env(&mut cmd, settings, bridge_dir);
 
-    let output = cmd
-        .output()
-        .map_err(|e| format!("failed to run devPulse status: {e}"))?;
+    let output = run_command_output(cmd, STATUS_COMMAND_TIMEOUT, "devPulse status")?;
     if !output.status.success() {
         let stderr = String::from_utf8_lossy(&output.stderr).trim().to_string();
         return Err(if stderr.is_empty() {
@@ -1189,9 +1189,7 @@ fn run_cli_json(
         .stderr(Stdio::piped());
     configure_env(&mut cmd, settings, bridge_dir);
 
-    let output = cmd
-        .output()
-        .map_err(|e| format!("failed to run devPulse command: {e}"))?;
+    let output = run_command_output(cmd, CLI_COMMAND_TIMEOUT, "devPulse command")?;
     if !output.status.success() {
         let stderr = String::from_utf8_lossy(&output.stderr).trim().to_string();
         return Err(if stderr.is_empty() {
@@ -1204,6 +1202,47 @@ fn run_cli_json(
     let stdout = String::from_utf8(output.stdout).map_err(|e| e.to_string())?;
     serde_json::from_str::<Value>(&stdout)
         .map_err(|e| format!("invalid devPulse command json: {e}"))
+}
+
+fn run_command_output(
+    mut cmd: Command,
+    timeout: Duration,
+    label: &str,
+) -> Result<Output, String> {
+    let mut child = cmd
+        .spawn()
+        .map_err(|e| format!("failed to start {label}: {e}"))?;
+
+    let start = std::time::Instant::now();
+    loop {
+        match child.try_wait() {
+            Ok(Some(_)) => {
+                return child
+                    .wait_with_output()
+                    .map_err(|e| format!("failed to read {label} output: {e}"));
+            }
+            Ok(None) => {
+                if start.elapsed() >= timeout {
+                    let _ = child.kill();
+                    let output = child
+                        .wait_with_output()
+                        .map_err(|e| format!("failed to stop timed out {label}: {e}"))?;
+                    let stderr = String::from_utf8_lossy(&output.stderr).trim().to_string();
+                    return Err(if stderr.is_empty() {
+                        format!("{label} timed out after {}s", timeout.as_secs())
+                    } else {
+                        format!("{label} timed out after {}s: {stderr}", timeout.as_secs())
+                    });
+                }
+                thread::sleep(Duration::from_millis(100));
+            }
+            Err(e) => {
+                let _ = child.kill();
+                let _ = child.wait();
+                return Err(format!("failed while waiting for {label}: {e}"));
+            }
+        }
+    }
 }
 
 fn cron_key_now() -> String {
