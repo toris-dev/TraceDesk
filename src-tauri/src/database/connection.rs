@@ -36,41 +36,6 @@ CREATE TABLE IF NOT EXISTS application_usage (
     duration INTEGER NOT NULL DEFAULT 0,
     UNIQUE(date, application)
 );
-
-CREATE TABLE IF NOT EXISTS crm_contacts (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    name TEXT NOT NULL,
-    category TEXT NOT NULL,
-    company TEXT,
-    role TEXT,
-    status TEXT NOT NULL DEFAULT 'active',
-    priority TEXT NOT NULL DEFAULT 'medium',
-    preferred_channel TEXT,
-    tags TEXT NOT NULL DEFAULT '[]',
-    notes TEXT NOT NULL DEFAULT '',
-    last_contact_at TEXT,
-    next_follow_up_at TEXT,
-    created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
-);
-
-CREATE INDEX IF NOT EXISTS idx_crm_contacts_category ON crm_contacts(category);
-CREATE INDEX IF NOT EXISTS idx_crm_contacts_next_follow_up ON crm_contacts(next_follow_up_at);
-CREATE INDEX IF NOT EXISTS idx_crm_contacts_updated_at ON crm_contacts(updated_at DESC);
-
-CREATE TABLE IF NOT EXISTS crm_interactions (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    contact_id INTEGER NOT NULL,
-    kind TEXT NOT NULL,
-    summary TEXT NOT NULL,
-    happened_at TEXT NOT NULL,
-    source TEXT,
-    created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    FOREIGN KEY(contact_id) REFERENCES crm_contacts(id) ON DELETE CASCADE
-);
-
-CREATE INDEX IF NOT EXISTS idx_crm_interactions_contact_id ON crm_interactions(contact_id);
-CREATE INDEX IF NOT EXISTS idx_crm_interactions_happened_at ON crm_interactions(happened_at DESC);
 ";
 
 pub fn data_dir() -> PathBuf {

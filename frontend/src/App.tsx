@@ -449,9 +449,9 @@ function AppContent({
     }
 
     switch (page) {
-      case "crm":
+      case "checklist":
         return (
-          <Suspense fallback={<MascotScene mood="loading" title={t("nav.crm")} size="md" />}>
+          <Suspense fallback={<MascotScene mood="loading" title={t("nav.checklist")} size="md" />}>
             <ChecklistView />
           </Suspense>
         );

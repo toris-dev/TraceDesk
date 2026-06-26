@@ -14,7 +14,7 @@ type NavItem = {
 };
 
 const NAV_ITEMS: NavItem[] = [
-  { id: "crm", code: "01", labelKey: "nav.crm", descKey: "nav.crmDesc", group: "command" },
+  { id: "checklist", code: "01", labelKey: "nav.checklist", descKey: "nav.checklistDesc", group: "command" },
   { id: "monitor", code: "02", labelKey: "nav.monitor", descKey: "nav.monitorDesc", group: "command" },
   { id: "ai", code: "03", labelKey: "nav.ai", descKey: "nav.aiDesc", group: "command" },
   { id: "pulse", code: "04", labelKey: "nav.pulse", descKey: "nav.pulseDesc", group: "command" },

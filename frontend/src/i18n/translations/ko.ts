@@ -21,7 +21,6 @@ export type TranslationTree = {
   events: Record<string, string>;
   actions: Record<string, string>;
   llm: Record<string, string>;
-  crm: Record<string, string | Record<string, string>>;
   pulse: Record<string, string>;
 };
 
@@ -69,8 +68,8 @@ export const ko = {
     error: "업데이트 확인 실패: {{message}}",
   },
   nav: {
-    crm: "체크리스트",
-    crmDesc: "고정 팝업 · 오늘 작업",
+    checklist: "체크리스트",
+    checklistDesc: "고정 팝업 · 오늘 작업",
     monitor: "커맨드 센터",
     monitorDesc: "활동 · AI · 실시간 통합",
     journal: "활동 일지",
@@ -329,67 +328,6 @@ export const ko = {
     askPlaceholder: "예: 오늘 어떤 링크를 복사했어?",
     ask: "질문",
     asking: "생각 중…",
-  },
-  crm: {
-    kicker: "FOUNDER CRM / RELATIONSHIP INTELLIGENCE",
-    headline: "1인 개발자를 위한 CRM",
-    subline: "만난 사람, 투자자, 고객, 후속 연락을 TraceDesk 안에서 가볍게 관리합니다.",
-    problemLabel: "문제",
-    problem: "노션은 무겁고 HubSpot은 과합니다.",
-    signalLabel: "AI 알림",
-    loading: "Founder CRM 불러오는 중…",
-    queueTitle: "관계 큐",
-    queueDesc: "사람 · 투자자 · 고객 목록",
-    detailTitle: "연락처 상세",
-    createTitle: "새 연락처",
-    createDesc: "가볍게 추가하고 바로 후속 일정을 잡으세요.",
-    remindersTitle: "팔로업 리마인더",
-    remindersDesc: "AI가 맥락과 타이밍을 함께 알려줍니다.",
-    interactionsTitle: "최근 상호작용",
-    interactionsDesc: "대화 메모와 미팅 기록",
-    interactionPlaceholder: "이번 대화에서 나온 핵심 맥락을 짧게 남기세요.",
-    addInteraction: "상호작용 추가",
-    save: "저장",
-    delete: "삭제",
-    deleteConfirm: "{{name}} 연락처를 삭제할까요?",
-    newContact: "새 연락처",
-    emptyContacts: "아직 등록된 연락처가 없습니다.",
-    emptyReminders: "예정된 팔로업이 없습니다.",
-    emptyInteractions: "기록된 상호작용이 없습니다.",
-    noCompany: "회사 / 역할 없음",
-    metrics: {
-      total: "전체 관계",
-      people: "만난 사람",
-      investors: "투자자",
-      customers: "고객",
-      overdue: "지연된 팔로업",
-      week: "이번 주 예정",
-    },
-    filters: {
-      all: "전체",
-      person: "만난 사람",
-      investor: "투자자",
-      customer: "고객",
-    },
-    fields: {
-      name: "이름",
-      category: "유형",
-      company: "회사",
-      role: "역할",
-      status: "관계 상태",
-      priority: "우선순위",
-      channel: "주 채널",
-      tags: "태그",
-      lastContact: "마지막 연락",
-      followUp: "다음 팔로업",
-      notes: "메모",
-    },
-    priorities: {
-      critical: "긴급",
-      high: "높음",
-      medium: "보통",
-      low: "낮음",
-    },
   },
   pulse: {
     kicker: "DEVPULSE / LOCAL CONTENT PIPELINE",
