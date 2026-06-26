@@ -663,7 +663,7 @@ function AppContent({
           </Suspense>
         )}
 
-        {isActivityPage(page) && renderActivityContent()}
+        {(page === "checklist" || isActivityPage(page)) && renderActivityContent()}
       </DashboardLayout>
 
       {page !== "ai" && (
