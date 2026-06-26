@@ -55,8 +55,8 @@ const AnalyticsView = lazy(() =>
 const AIChatView = lazy(() =>
   import("./views/AIChatView").then((m) => ({ default: m.AIChatView })),
 );
-const FounderCrmView = lazy(() =>
-  import("./views/FounderCrmView").then((m) => ({ default: m.FounderCrmView })),
+const ChecklistView = lazy(() =>
+  import("./views/ChecklistView").then((m) => ({ default: m.ChecklistView })),
 );
 const DevPulseView = lazy(() =>
   import("./views/DevPulseView").then((m) => ({ default: m.DevPulseView })),
@@ -131,8 +131,19 @@ function AppContent({
   appSettings: AppSettings;
   onSettingsChange: (settings: AppSettings) => void;
 }) {
+  const isChecklistPopup =
+    typeof window !== "undefined" &&
+    new URLSearchParams(window.location.search).get("mode") === "checklist";
+  if (isChecklistPopup) {
+    return (
+      <Suspense fallback={<MascotScene mood="loading" title="Checklist" size="md" />}>
+        <ChecklistView popup />
+      </Suspense>
+    );
+  }
+
   const { locale, t } = useI18n();
-  const [page, setPage] = useState<DashboardPage>("crm");
+  const [page, setPage] = useState<DashboardPage>("pulse");
   const [selectedDate, setSelectedDate] = useState(todayISO);
   const [availableDates, setAvailableDates] = useState<string[]>([]);
   const [stats, setStats] = useState<DailyStatistics | null>(null);
@@ -441,7 +452,7 @@ function AppContent({
       case "crm":
         return (
           <Suspense fallback={<MascotScene mood="loading" title={t("nav.crm")} size="md" />}>
-            <FounderCrmView />
+            <ChecklistView />
           </Suspense>
         );
 

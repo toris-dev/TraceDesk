@@ -7,12 +7,11 @@ import {
   pickDevPulseRootDir,
   runDevPulseNow,
   runDevPulseSnsNow,
-  startDevPulseInfra,
   startDevPulseDaemon,
   startDevPulseSnsDaemon,
-  stopDevPulseInfra,
   stopDevPulseDaemon,
   stopDevPulseSnsDaemon,
+  showChecklistWindow,
   toAssetUrl,
   updateDevPulseSecrets,
   updateDevPulseSnsConfig,
@@ -64,6 +63,7 @@ export function DevPulseView() {
   const [running, setRunning] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [rootDir, setRootDir] = useState("");
+  const [dockerCliPath, setDockerCliPath] = useState("");
   const [cronEnabled, setCronEnabled] = useState(false);
   const [cronExpr, setCronExpr] = useState("0 9 * * *");
   const [feeds, setFeeds] = useState("all new ask show top");
@@ -118,6 +118,7 @@ export function DevPulseView() {
       const next = await getDevPulseStatus();
       setStatus(next);
       setRootDir(next.config.root_dir);
+      setDockerCliPath(next.config.docker_cli_path);
       setCronEnabled(next.config.cron_enabled);
       setCronExpr(next.config.cron_expr);
       setFeeds(next.config.feeds.join(" "));
@@ -186,6 +187,7 @@ export function DevPulseView() {
     try {
       await updateDevPulseSettings({
         rootDir,
+        dockerCliPath,
         cronEnabled,
         cronExpr,
         feeds: feeds.split(/\s+/).filter(Boolean),
@@ -247,19 +249,6 @@ export function DevPulseView() {
       } else {
         await stopDevPulseDaemon();
       }
-      await load();
-    } catch (e) {
-      setError(formatError(e));
-    } finally {
-      setRunning(null);
-    }
-  }
-
-  async function controlInfra(action: "start" | "stop") {
-    setRunning(action === "start" ? "infra-start" : "infra-stop");
-    try {
-      const next = action === "start" ? await startDevPulseInfra() : await stopDevPulseInfra();
-      setInfraStatus(next);
       await load();
     } catch (e) {
       setError(formatError(e));
@@ -336,7 +325,6 @@ export function DevPulseView() {
       compactList([...(status?.payload.logs?.tail ?? []), ...(status?.payload.progress?.recent_logs ?? [])]).slice(-120),
     [status?.payload.logs?.tail, status?.payload.progress?.recent_logs],
   );
-  const isLive = Boolean(status?.runtime.run_in_flight || status?.runtime.daemon_running);
   const currentPhase = progress?.phase ?? "-";
   const currentStep = progress?.step ?? "-";
   const currentTitle = progress?.current_title ?? progress?.current_post_id ?? "-";
@@ -346,7 +334,6 @@ export function DevPulseView() {
     typeof status?.payload.db?.counts?.error === "string" ? status.payload.db.counts.error : null;
   const runtimeError = status?.runtime.last_error ?? null;
   const snsRuntimeError = status?.sns_runtime.last_error ?? null;
-  const infraRunningCount = (infraStatus?.services ?? []).filter((service) => service.running).length;
   const rootReady = status?.config.root_ready ?? false;
   const setupHint = status?.config.setup_hint || status?.runtime.last_error || t("pulse.setupSaveHint");
   const dockerReady = Boolean(infraStatus?.docker_available && infraStatus?.docker_daemon_ready);
@@ -381,6 +368,9 @@ export function DevPulseView() {
             <div className="flex flex-wrap items-center gap-2 pt-1">
               <span className="rounded-full border border-[var(--cyber-cyan)]/25 bg-[var(--cyber-cyan-dim)]/10 px-3 py-1 text-[11px] font-data text-[var(--cyber-cyan)]">
                 {t("pulse.surfaceTrail")}
+              </span>
+              <span className="rounded-full border border-[var(--cyber-magenta)]/25 bg-[var(--cyber-magenta-dim)]/10 px-3 py-1 text-[11px] font-data text-[var(--cyber-magenta)]">
+                {t("pulse.externalRuntime")}
               </span>
               <button
                 type="button"
@@ -433,18 +423,17 @@ export function DevPulseView() {
           <div className="flex flex-wrap gap-2">
             <button
               type="button"
-              onClick={() => void controlInfra(infraRunningCount === 0 ? "start" : "stop")}
-              disabled={running !== null || !rootReady}
-              className="rounded-lg border border-border px-3 py-2 text-sm text-text-muted hover:border-[var(--cyber-cyan)] hover:text-[var(--cyber-cyan)] disabled:opacity-50"
+              onClick={() => void showChecklistWindow()}
+              className="rounded-lg border border-border px-3 py-2 text-sm text-text-muted hover:border-[var(--cyber-magenta)] hover:text-[var(--cyber-magenta)]"
             >
-              {infraRunningCount === 0 ? t("pulse.startInfra") : t("pulse.stopInfra")}
+              {t("pulse.openChecklist")}
             </button>
             <button
               type="button"
               onClick={() => void load()}
-              className="rounded-lg border border-border px-3 py-2 text-sm text-text-muted hover:border-[var(--cyber-cyan)] hover:text-[var(--cyber-cyan)]"
+              className="rounded-lg border border-border px-3 py-2 text-sm text-text-muted hover:border-[var(--cyber-cyan)] hover:text-[var(--cyber-cyan)] disabled:opacity-50"
             >
-              {isLive ? t("pulse.autoRefresh") : t("common.refresh")}
+              {t("pulse.inspectRuntime")}
             </button>
             <button
               type="button"
@@ -534,8 +523,8 @@ export function DevPulseView() {
         <div className="mt-4 rounded-xl border border-border/70 bg-surface/60 p-4 space-y-3">
           <div className="flex flex-wrap items-start justify-between gap-3">
             <div>
-              <p className="text-[11px] font-data text-text-muted">{t("pulse.dockerTitle")}</p>
-              <p className="mt-1 text-xs text-text-muted">{t("pulse.dockerBundled")}</p>
+              <p className="text-[11px] font-data text-text-muted">{t("pulse.runtimeTitle")}</p>
+              <p className="mt-1 text-xs text-text-muted">{t("pulse.runtimeHint")}</p>
             </div>
             <p className="text-sm text-text-muted">{infraStatus?.detail ?? (loading ? t("common.loading") : "-")}</p>
           </div>
@@ -552,8 +541,12 @@ export function DevPulseView() {
             </span>
           </div>
           <div>
-            <p className="text-[11px] font-data text-text-muted">{t("pulse.infraTitle")}</p>
+            <p className="text-[11px] font-data text-text-muted">{t("pulse.runtimeComposeDir")}</p>
             <p className="mt-1 text-sm text-text-muted">{composeDir}</p>
+          </div>
+          <div>
+            <p className="text-[11px] font-data text-text-muted">{t("pulse.runtimeBinary")}</p>
+            <p className="mt-1 text-sm text-text-muted">{dockerCliPath.trim() || "docker"}</p>
           </div>
           <div className="flex flex-wrap gap-2">
             {(infraStatus?.services ?? []).map((service) => (
@@ -683,6 +676,16 @@ export function DevPulseView() {
               {!rootReady && setupHint && (
                 <p className="text-xs text-amber-300">{setupHint}</p>
               )}
+            </label>
+            <label className="space-y-1 text-sm md:col-span-2">
+              <span className="text-text-muted">{t("pulse.dockerCliPath")}</span>
+              <input
+                value={dockerCliPath}
+                onChange={(e) => setDockerCliPath(e.target.value)}
+                placeholder="/usr/local/bin/docker"
+                className="w-full rounded-lg border border-border bg-surface px-3 py-2 text-sm"
+              />
+              <p className="text-xs text-text-muted">{t("pulse.dockerCliPathHint")}</p>
             </label>
             <label className="space-y-1 text-sm">
               <span className="text-text-muted">{t("pulse.feeds")}</span>

@@ -58,6 +58,7 @@ pub struct DevPulseRuntime {
 #[derive(Debug, Clone, Serialize)]
 pub struct DevPulseConfigView {
     pub root_dir: String,
+    pub docker_cli_path: String,
     pub root_ready: bool,
     pub root_exists: bool,
     pub setup_hint: String,
@@ -131,6 +132,7 @@ pub struct DevPulseStatusView {
 #[serde(rename_all = "camelCase")]
 pub struct UpdateDevPulseSettingsArgs {
     pub root_dir: Option<String>,
+    pub docker_cli_path: Option<String>,
     pub cron_enabled: Option<bool>,
     pub cron_expr: Option<String>,
     pub feeds: Option<Vec<String>>,
@@ -341,6 +343,7 @@ fn build_config_view(settings: &AppSettings, root: Option<&Path>) -> DevPulseCon
     };
     DevPulseConfigView {
         root_dir,
+        docker_cli_path: settings.devpulse_docker_cli_path.clone(),
         root_ready,
         root_exists,
         setup_hint,
@@ -803,8 +806,18 @@ fn build_dependency_views(root: &Path, settings: &AppSettings) -> Vec<DevPulseDe
     ]
 }
 
-fn docker_available() -> Result<(), String> {
-    let mut cmd = Command::new("docker");
+fn docker_program(settings: &AppSettings) -> &str {
+    let configured = settings.devpulse_docker_cli_path.trim();
+    if configured.is_empty() {
+        "docker"
+    } else {
+        configured
+    }
+}
+
+fn docker_available(settings: &AppSettings) -> Result<(), String> {
+    let program = docker_program(settings);
+    let mut cmd = Command::new(program);
     cmd.arg("--version")
         .stdout(Stdio::null())
         .stderr(Stdio::piped());
@@ -815,7 +828,7 @@ fn docker_available() -> Result<(), String> {
         } else {
             let stderr = String::from_utf8_lossy(&output.stderr).trim().to_string();
             Err(if stderr.is_empty() {
-                "docker --version failed".to_string()
+                format!("{program} --version failed")
             } else {
                 stderr
             })
@@ -823,8 +836,9 @@ fn docker_available() -> Result<(), String> {
     })
 }
 
-fn docker_daemon_ready() -> Result<(), String> {
-    let mut cmd = Command::new("docker");
+fn docker_daemon_ready(settings: &AppSettings) -> Result<(), String> {
+    let program = docker_program(settings);
+    let mut cmd = Command::new(program);
     cmd.arg("info")
         .stdout(Stdio::null())
         .stderr(Stdio::piped());
@@ -843,8 +857,8 @@ fn docker_daemon_ready() -> Result<(), String> {
     })
 }
 
-fn docker_compose_command(root: &Path) -> Command {
-    let mut cmd = Command::new("docker");
+fn docker_compose_command(root: &Path, settings: &AppSettings) -> Command {
+    let mut cmd = Command::new(docker_program(settings));
     cmd.current_dir(infra_dir(root))
         .arg("compose")
         .arg("-f")
@@ -852,8 +866,8 @@ fn docker_compose_command(root: &Path) -> Command {
     cmd
 }
 
-fn list_running_infra_services(root: &Path) -> Result<Vec<String>, String> {
-    let output = docker_compose_command(root)
+fn list_running_infra_services(root: &Path, settings: &AppSettings) -> Result<Vec<String>, String> {
+    let output = docker_compose_command(root, settings)
         .arg("ps")
         .arg("--services")
         .arg("--status")
@@ -879,8 +893,8 @@ fn list_running_infra_services(root: &Path) -> Result<Vec<String>, String> {
         .collect())
 }
 
-fn build_infra_status_without_root() -> DevPulseInfraStatusView {
-    let docker_check = docker_available();
+fn build_infra_status_without_root(settings: &AppSettings) -> DevPulseInfraStatusView {
+    let docker_check = docker_available(settings);
     if let Err(detail) = docker_check {
         return DevPulseInfraStatusView {
             docker_available: false,
@@ -897,7 +911,7 @@ fn build_infra_status_without_root() -> DevPulseInfraStatusView {
         };
     }
 
-    let daemon_check = docker_daemon_ready();
+    let daemon_check = docker_daemon_ready(settings);
     if let Err(detail) = daemon_check {
         return DevPulseInfraStatusView {
             docker_available: true,
@@ -929,11 +943,11 @@ fn build_infra_status_without_root() -> DevPulseInfraStatusView {
     }
 }
 
-fn build_infra_status(root: &Path) -> DevPulseInfraStatusView {
+fn build_infra_status(root: &Path, settings: &AppSettings) -> DevPulseInfraStatusView {
     let compose_dir = infra_dir(root);
     let compose_dir_text = compose_dir.display().to_string();
 
-    let docker_check = docker_available();
+    let docker_check = docker_available(settings);
     if let Err(detail) = docker_check {
         return DevPulseInfraStatusView {
             docker_available: false,
@@ -950,7 +964,7 @@ fn build_infra_status(root: &Path) -> DevPulseInfraStatusView {
         };
     }
 
-    let daemon_check = docker_daemon_ready();
+    let daemon_check = docker_daemon_ready(settings);
     if let Err(detail) = daemon_check {
         return DevPulseInfraStatusView {
             docker_available: true,
@@ -967,7 +981,7 @@ fn build_infra_status(root: &Path) -> DevPulseInfraStatusView {
         };
     }
 
-    match list_running_infra_services(root) {
+    match list_running_infra_services(root, settings) {
         Ok(running) => {
             let services = INFRA_SERVICES
                 .iter()
@@ -1462,6 +1476,9 @@ pub fn update_devpulse_settings(
     if let Some(root) = args.root_dir {
         settings.devpulse_root_dir = root.trim().to_string();
     }
+    if let Some(path) = args.docker_cli_path {
+        settings.devpulse_docker_cli_path = path.trim().to_string();
+    }
     if let Some(enabled) = args.cron_enabled {
         settings.devpulse_cron_enabled = enabled;
     }
@@ -1684,9 +1701,9 @@ pub fn get_devpulse_infra_status(
 ) -> Result<DevPulseInfraStatusView, String> {
     let settings = settings_state.0.read().map_err(|e| e.to_string())?.clone();
     if let Some(root) = try_resolve_root(&settings) {
-        return Ok(build_infra_status(&root));
+        return Ok(build_infra_status(&root, &settings));
     }
-    Ok(build_infra_status_without_root())
+    Ok(build_infra_status_without_root(&settings))
 }
 
 #[tauri::command]
@@ -1695,10 +1712,10 @@ pub fn start_devpulse_infra(
 ) -> Result<DevPulseInfraStatusView, String> {
     let settings = settings_state.0.read().map_err(|e| e.to_string())?.clone();
     let root = resolve_root(&settings)?;
-    docker_available()?;
-    docker_daemon_ready()?;
+    docker_available(&settings)?;
+    docker_daemon_ready(&settings)?;
 
-    let output = docker_compose_command(&root)
+    let output = docker_compose_command(&root, &settings)
         .arg("up")
         .arg("-d")
         .arg("postgres")
@@ -1719,7 +1736,7 @@ pub fn start_devpulse_infra(
         });
     }
 
-    Ok(build_infra_status(&root))
+    Ok(build_infra_status(&root, &settings))
 }
 
 #[tauri::command]
@@ -1728,10 +1745,10 @@ pub fn stop_devpulse_infra(
 ) -> Result<DevPulseInfraStatusView, String> {
     let settings = settings_state.0.read().map_err(|e| e.to_string())?.clone();
     let root = resolve_root(&settings)?;
-    docker_available()?;
-    docker_daemon_ready()?;
+    docker_available(&settings)?;
+    docker_daemon_ready(&settings)?;
 
-    let output = docker_compose_command(&root)
+    let output = docker_compose_command(&root, &settings)
         .arg("stop")
         .args(INFRA_SERVICES)
         .stdout(Stdio::piped())
@@ -1747,7 +1764,7 @@ pub fn stop_devpulse_infra(
         });
     }
 
-    Ok(build_infra_status(&root))
+    Ok(build_infra_status(&root, &settings))
 }
 
 #[tauri::command]

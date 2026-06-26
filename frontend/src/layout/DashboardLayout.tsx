@@ -79,7 +79,7 @@ export function DashboardLayout({
             </div>
             <div className="hidden min-w-0 flex-1 md:block">
               <p className="cyber-window-kicker whitespace-nowrap">TRACEDESK / LOCAL ACTIVITY OS</p>
-              <h2 className="truncate whitespace-nowrap text-xl font-display font-semibold tracking-wide text-[var(--cyber-cyan)]">
+              <h2 className="truncate whitespace-nowrap text-[1.05rem] font-display font-semibold text-[var(--cyber-cyan)]">
                 {current ? t(current.labelKey) : ""}
               </h2>
               <p className="truncate whitespace-nowrap text-sm text-text-muted">
@@ -87,7 +87,7 @@ export function DashboardLayout({
               </p>
             </div>
 
-            <div className="relative ml-auto flex min-w-0 flex-nowrap items-center gap-2 overflow-x-auto scrollbar-none">
+            <div className="relative ml-auto flex shrink-0 min-w-0 flex-nowrap items-center gap-2 overflow-x-auto scrollbar-none">
               {toolbar}
               {themeToggle}
               {onRefresh && (

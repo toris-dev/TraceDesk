@@ -213,6 +213,7 @@ function previewSettings(): AppSettings {
     ollama_base_url: "http://localhost:11434",
     api_base_url: "",
     devpulse_root_dir: "../devPulse",
+    devpulse_docker_cli_path: "/usr/local/bin/docker",
     devpulse_cron_enabled: false,
     devpulse_cron_expr: "0 9 * * *",
     devpulse_feeds: ["all", "new", "ask", "show", "top"],
@@ -557,6 +558,7 @@ async function mockInvoke<T>(cmd: string, args?: Record<string, unknown>): Promi
     } satisfies DbStats,
     get_devpulse_config: {
       root_dir: "/Users/toris/projects/devPulse",
+      docker_cli_path: "/usr/local/bin/docker",
       root_ready: true,
       root_exists: true,
       setup_hint: "",
@@ -576,6 +578,7 @@ async function mockInvoke<T>(cmd: string, args?: Record<string, unknown>): Promi
     get_devpulse_status: {
       config: {
         root_dir: "/Users/toris/projects/devPulse",
+        docker_cli_path: "/usr/local/bin/docker",
         root_ready: true,
         root_exists: true,
         setup_hint: "",
@@ -799,6 +802,15 @@ async function mockInvoke<T>(cmd: string, args?: Record<string, unknown>): Promi
   if (cmd === "update_devpulse_settings") {
     return { ...(responses.get_devpulse_config as Record<string, unknown>), ...(args ?? {}) } as T;
   }
+  if (cmd === "get_checklist_items") {
+    return [
+      { id: "todo-1", title: "Pulse 경로 저장 확인", done: true, created_at: "2026-06-26T09:00:00Z" },
+      { id: "todo-2", title: "외부 Docker CLI 경로 연결", done: false, created_at: "2026-06-26T09:10:00Z" },
+      { id: "todo-3", title: "고정 체크리스트 팝업 정리", done: false, created_at: "2026-06-26T09:20:00Z" },
+    ] as T;
+  }
+  if (cmd === "save_checklist_items") return (args?.items ?? []) as T;
+  if (cmd === "show_checklist_window" || cmd === "hide_checklist_window") return undefined as T;
   if (cmd === "get_devpulse_secrets_status" || cmd === "update_devpulse_secrets") {
     return {
       has_mastodon_token: Boolean(args?.mastodonAccessToken) || cmd === "get_devpulse_secrets_status",
@@ -1174,6 +1186,7 @@ export interface AppSettings {
   ollama_base_url: string;
   api_base_url: string;
   devpulse_root_dir: string;
+  devpulse_docker_cli_path: string;
   devpulse_cron_enabled: boolean;
   devpulse_cron_expr: string;
   devpulse_feeds: string[];
@@ -1270,6 +1283,7 @@ export function runArchiveNow() {
 
 export interface DevPulseConfigView {
   root_dir: string;
+  docker_cli_path: string;
   root_ready: boolean;
   root_exists: boolean;
   setup_hint: string;
@@ -1476,6 +1490,7 @@ export function getDevPulseConfig() {
 
 export function updateDevPulseSettings(opts: {
   rootDir?: string;
+  dockerCliPath?: string;
   cronEnabled?: boolean;
   cronExpr?: string;
   feeds?: string[];
@@ -1490,6 +1505,7 @@ export function updateDevPulseSettings(opts: {
 }) {
   return invokeCmd<DevPulseConfigView>("update_devpulse_settings", {
     rootDir: opts.rootDir ?? null,
+    dockerCliPath: opts.dockerCliPath ?? null,
     cronEnabled: opts.cronEnabled ?? null,
     cronExpr: opts.cronExpr ?? null,
     feeds: opts.feeds ?? null,
@@ -1506,6 +1522,29 @@ export function updateDevPulseSettings(opts: {
 
 export function getDevPulseSecretsStatus() {
   return invokeCmd<DevPulseSecretsStatusView>("get_devpulse_secrets_status");
+}
+
+export interface ChecklistItem {
+  id: string;
+  title: string;
+  done: boolean;
+  created_at: string;
+}
+
+export function getChecklistItems() {
+  return invokeCmd<ChecklistItem[]>("get_checklist_items");
+}
+
+export function saveChecklistItems(items: ChecklistItem[]) {
+  return invokeCmd<ChecklistItem[]>("save_checklist_items", { items });
+}
+
+export function showChecklistWindow() {
+  return invokeCmd<void>("show_checklist_window");
+}
+
+export function hideChecklistWindow() {
+  return invokeCmd<void>("hide_checklist_window");
 }
 
 export function updateDevPulseSecrets(opts: {

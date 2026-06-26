@@ -2,9 +2,9 @@ mod activity_emit;
 mod activity_item;
 mod analytics;
 mod archive;
+mod checklist;
 mod collector;
 mod commands;
-mod crm;
 mod database;
 mod devpulse;
 mod devpulse_secrets;
@@ -157,10 +157,10 @@ pub fn run() {
             commands::check_health,
             commands::check_permissions_cli,
             commands::request_permissions_cli,
-            crm::get_founder_crm,
-            crm::save_founder_contact,
-            crm::delete_founder_contact,
-            crm::add_founder_interaction,
+            checklist::get_checklist_items,
+            checklist::save_checklist_items,
+            checklist::show_checklist_window,
+            checklist::hide_checklist_window,
             settings_commands::get_settings,
             settings_commands::update_settings,
             settings_commands::complete_setup,
@@ -202,6 +202,14 @@ pub fn run() {
                     api.prevent_close();
                     tray::hide_main_window(app_handle);
                     tracing::info!("window hidden — collector keeps running in tray");
+                }
+            }
+            RunEvent::WindowEvent { label, event, .. } if label == "checklist" => {
+                if let WindowEvent::CloseRequested { api, .. } = event {
+                    api.prevent_close();
+                    if let Some(window) = app_handle.get_webview_window("checklist") {
+                        let _ = window.hide();
+                    }
                 }
             }
             #[cfg(target_os = "macos")]

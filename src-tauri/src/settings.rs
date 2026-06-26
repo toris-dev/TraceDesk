@@ -13,6 +13,16 @@ struct InstallSeed {
     enable_input_monitoring: bool,
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+pub struct ChecklistItem {
+    pub id: String,
+    pub title: String,
+    #[serde(default)]
+    pub done: bool,
+    #[serde(default)]
+    pub created_at: String,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct AppSettings {
     #[serde(default)]
@@ -62,6 +72,8 @@ pub struct AppSettings {
     #[serde(default)]
     pub devpulse_root_dir: String,
     #[serde(default)]
+    pub devpulse_docker_cli_path: String,
+    #[serde(default)]
     pub devpulse_cron_enabled: bool,
     #[serde(default = "default_devpulse_cron_expr")]
     pub devpulse_cron_expr: String,
@@ -83,6 +95,8 @@ pub struct AppSettings {
     pub devpulse_sns_mode: String,
     #[serde(default)]
     pub devpulse_mastodon_instance: String,
+    #[serde(default)]
+    pub checklist_items: Vec<ChecklistItem>,
 }
 
 fn default_llm_provider() -> String {
@@ -206,6 +220,7 @@ impl Default for AppSettings {
             api_base_url: default_api_base_url(),
             llm_connected: false,
             devpulse_root_dir: String::new(),
+            devpulse_docker_cli_path: String::new(),
             devpulse_cron_enabled: false,
             devpulse_cron_expr: default_devpulse_cron_expr(),
             devpulse_feeds: default_devpulse_feeds(),
@@ -217,6 +232,7 @@ impl Default for AppSettings {
             devpulse_bundle_size: default_devpulse_bundle_size(),
             devpulse_sns_mode: default_devpulse_sns_mode(),
             devpulse_mastodon_instance: String::new(),
+            checklist_items: Vec::new(),
         }
     }
 }

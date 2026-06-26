@@ -71,11 +71,11 @@ export function CyberSidebar({
   return (
     <aside
       className={`cyber-sidebar cyber-app-rail cyber-sidebar-shell hidden md:flex shrink-0 h-full flex-col border-r transition-[width] duration-300 ease-out ${
-        collapsed ? "w-[5rem]" : "w-[19.5rem]"
+        collapsed ? "w-[5.5rem]" : "w-[21rem]"
       }`}
       data-collapsed={collapsed ? "true" : "false"}
     >
-      <div className={`cyber-brand-bay border-b border-border ${collapsed ? "px-2.5 py-4" : "px-4 py-5"}`}>
+      <div className={`cyber-brand-bay border-b border-border ${collapsed ? "px-3 py-4" : "px-5 py-[1.375rem]"}`}>
         <div className={`flex items-start ${collapsed ? "flex-col items-center gap-3" : "justify-between gap-3"}`}>
           <AppLogo subtitle={subtitle} compact={collapsed} />
           <button

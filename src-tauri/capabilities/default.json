@@ -2,7 +2,7 @@
   "$schema": "https://schema.tauri.app/config/2/capability",
   "identifier": "default",
   "description": "Default TraceDesk capabilities",
-  "windows": ["main"],
+  "windows": ["main", "checklist"],
   "permissions": [
     "core:default",
     "opener:default",
