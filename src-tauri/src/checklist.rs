@@ -1,6 +1,9 @@
 use crate::settings::{save_settings, ChecklistItem};
 use crate::settings_commands::SettingsState;
-use tauri::{AppHandle, Emitter, LogicalPosition, LogicalSize, Manager, State, WebviewUrl, WebviewWindowBuilder};
+use tauri::{
+    AppHandle, Emitter, LogicalPosition, LogicalSize, Manager, State, WebviewUrl,
+    WebviewWindowBuilder,
+};
 
 const CHECKLIST_WINDOW_LABEL: &str = "checklist";
 const CHECKLIST_WINDOW_EVENT: &str = "checklist-updated";
@@ -42,7 +45,7 @@ fn create_checklist_window(app: &AppHandle) -> Result<(), String> {
     let window = WebviewWindowBuilder::new(
         app,
         CHECKLIST_WINDOW_LABEL,
-        WebviewUrl::App("index.html?mode=checklist".into()),
+        WebviewUrl::App("index.html#checklist".into()),
     )
     .title("TraceDesk Checklist")
     .inner_size(388.0, 640.0)

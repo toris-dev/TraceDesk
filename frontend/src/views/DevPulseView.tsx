@@ -157,7 +157,8 @@ export function DevPulseView() {
     try {
       const config = await pickDevPulseRootDir();
       setRootDir(config.root_dir);
-      await load();
+      setStatus((current) => (current ? { ...current, config } : current));
+      void load();
     } catch (e) {
       setError(formatError(e));
     } finally {
@@ -185,7 +186,7 @@ export function DevPulseView() {
   async function saveConfig() {
     setSaving(true);
     try {
-      await updateDevPulseSettings({
+      const config = await updateDevPulseSettings({
         rootDir,
         dockerCliPath,
         cronEnabled,
@@ -203,6 +204,9 @@ export function DevPulseView() {
         snsMode,
         mastodonInstance,
       });
+      setRootDir(config.root_dir);
+      setDockerCliPath(config.docker_cli_path);
+      setStatus((current) => (current ? { ...current, config } : current));
       if (mastodonToken.trim()) {
         const nextSecrets = await updateDevPulseSecrets({ mastodonAccessToken: mastodonToken.trim() });
         setSecretStatus(nextSecrets);

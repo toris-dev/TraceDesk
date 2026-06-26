@@ -8,6 +8,11 @@ import {
 } from "../api/client";
 
 const CHECKLIST_EVENT = "checklist-updated";
+const QUICK_TASKS = [
+  "Pulse 저장 경로 확인",
+  "오늘 devPulse 실행 결과 확인",
+  "카드/영상/SNS 산출물 점검",
+];
 
 function makeItem(title: string): ChecklistItem {
   return {
@@ -89,7 +94,7 @@ export function ChecklistView({ popup = false }: { popup?: boolean }) {
         <div className="checklist-hero-head">
           <div>
             <p className="td-label">{popup ? "TRACE PINNED CHECKLIST" : "TRACE OPS CHECKLIST"}</p>
-            <h2 className="checklist-title">{popup ? "Always-on task dock" : "Focus queue for today"}</h2>
+            <h2 className="checklist-title">{popup ? "오늘 작업" : "오늘 작업 큐"}</h2>
             <p className="checklist-subtitle">
               {popup
                 ? "다른 앱 위에 고정된 상태로 오늘 처리할 작업을 하나씩 끝낼 수 있습니다."
@@ -155,7 +160,22 @@ export function ChecklistView({ popup = false }: { popup?: boolean }) {
         {loading ? (
           <div className="checklist-empty">불러오는 중…</div>
         ) : items.length === 0 ? (
-          <div className="checklist-empty">체크리스트를 추가하면 팝업과 메인 화면이 같이 동기화됩니다.</div>
+          <div className="checklist-empty checklist-empty-rich">
+            <strong>아직 등록된 작업이 없습니다.</strong>
+            <span>아래 빠른 작업을 누르거나 직접 입력하면 팝업과 메인 화면에 바로 동기화됩니다.</span>
+            <div className="checklist-quick-actions">
+              {QUICK_TASKS.map((task) => (
+                <button
+                  type="button"
+                  key={task}
+                  onClick={() => void commit([makeItem(task), ...items])}
+                  className="checklist-quick-button"
+                >
+                  {task}
+                </button>
+              ))}
+            </div>
+          </div>
         ) : (
           <div className="checklist-list">
             {items.map((item, index) => (

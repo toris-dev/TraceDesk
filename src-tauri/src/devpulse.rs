@@ -318,12 +318,7 @@ fn build_config_view(settings: &AppSettings, root: Option<&Path>) -> DevPulseCon
     let configured = configured_root_path(settings);
     let configured_text = settings.devpulse_root_dir.trim().to_string();
     let (root_dir, root_ready, root_exists, setup_hint) = match root {
-        Some(path) => (
-            path.display().to_string(),
-            true,
-            true,
-            String::new(),
-        ),
+        Some(path) => (path.display().to_string(), true, true, String::new()),
         None => {
             let display = if configured_text.is_empty() {
                 String::new()
@@ -420,23 +415,30 @@ fn build_sns_runtime_view(runtime: &mut DevPulseRuntime) -> DevPulseSnsRuntimeVi
 }
 
 fn read_devpulse_env(root: &Path) -> Vec<(String, String)> {
-    [root.join("infra").join(".env"), root.join("infra").join(".env.instagram")]
-        .into_iter()
-        .filter_map(|path| fs::read_to_string(path).ok())
-        .flat_map(|raw| {
-            raw.lines()
-                .map(str::trim)
-                .filter(|line| !line.is_empty() && !line.starts_with('#'))
-                .filter_map(|line| line.split_once('='))
-                .map(|(key, value)| {
-                    (
-                        key.trim().to_string(),
-                        value.trim().trim_matches('"').trim_matches('\'').to_string(),
-                    )
-                })
-                .collect::<Vec<_>>()
-        })
-        .collect()
+    [
+        root.join("infra").join(".env"),
+        root.join("infra").join(".env.instagram"),
+    ]
+    .into_iter()
+    .filter_map(|path| fs::read_to_string(path).ok())
+    .flat_map(|raw| {
+        raw.lines()
+            .map(str::trim)
+            .filter(|line| !line.is_empty() && !line.starts_with('#'))
+            .filter_map(|line| line.split_once('='))
+            .map(|(key, value)| {
+                (
+                    key.trim().to_string(),
+                    value
+                        .trim()
+                        .trim_matches('"')
+                        .trim_matches('\'')
+                        .to_string(),
+                )
+            })
+            .collect::<Vec<_>>()
+    })
+    .collect()
 }
 
 fn env_lookup(entries: &[(String, String)], key: &str) -> Option<String> {
@@ -466,7 +468,11 @@ fn instagram_env_map(root: &Path) -> Vec<(String, String)> {
             .map(|(key, value)| {
                 (
                     key.trim().to_string(),
-                    value.trim().trim_matches('"').trim_matches('\'').to_string(),
+                    value
+                        .trim()
+                        .trim_matches('"')
+                        .trim_matches('\'')
+                        .to_string(),
                 )
             })
             .collect()
@@ -485,7 +491,13 @@ fn build_instagram_config_view(root: &Path) -> DevPulseSnsConfigView {
                 .map(ToOwned::to_owned)
                 .collect::<Vec<_>>()
         })
-        .unwrap_or_else(|| vec!["09:00".to_string(), "14:00".to_string(), "19:00".to_string()]);
+        .unwrap_or_else(|| {
+            vec![
+                "09:00".to_string(),
+                "14:00".to_string(),
+                "19:00".to_string(),
+            ]
+        });
     DevPulseSnsConfigView {
         app_id: env_lookup(&env_entries, "IG_APP_ID").unwrap_or_default(),
         user_id: env_lookup(&env_entries, "IG_USER_ID").unwrap_or_default(),
@@ -496,16 +508,20 @@ fn build_instagram_config_view(root: &Path) -> DevPulseSnsConfigView {
         reels_per_day: env_lookup(&env_entries, "IG_REELS_PER_DAY")
             .and_then(|value| value.parse::<u32>().ok())
             .unwrap_or(1),
-        timezone: env_lookup(&env_entries, "IG_TIMEZONE").unwrap_or_else(|| "Asia/Seoul".to_string()),
+        timezone: env_lookup(&env_entries, "IG_TIMEZONE")
+            .unwrap_or_else(|| "Asia/Seoul".to_string()),
         poll_sec: env_lookup(&env_entries, "IG_POLL_SEC")
             .and_then(|value| value.parse::<u32>().ok())
             .unwrap_or(60),
-        graph_version: env_lookup(&env_entries, "IG_GRAPH_VERSION").unwrap_or_else(|| "v21.0".to_string()),
+        graph_version: env_lookup(&env_entries, "IG_GRAPH_VERSION")
+            .unwrap_or_else(|| "v21.0".to_string()),
         media_port: env_lookup(&env_entries, "IG_MEDIA_PORT")
             .and_then(|value| value.parse::<u32>().ok())
             .unwrap_or(9088),
-        media_public_base_url: env_lookup(&env_entries, "IG_MEDIA_PUBLIC_BASE_URL").unwrap_or_default(),
-        minio_public_endpoint: env_lookup(&env_entries, "MINIO_PUBLIC_ENDPOINT").unwrap_or_default(),
+        media_public_base_url: env_lookup(&env_entries, "IG_MEDIA_PUBLIC_BASE_URL")
+            .unwrap_or_default(),
+        minio_public_endpoint: env_lookup(&env_entries, "MINIO_PUBLIC_ENDPOINT")
+            .unwrap_or_default(),
         dry_run: env_lookup(&env_entries, "IG_DRY_RUN")
             .map(|value| matches!(value.to_ascii_lowercase().as_str(), "1" | "true" | "yes"))
             .unwrap_or(true),
@@ -518,7 +534,8 @@ fn write_instagram_env(root: &Path, updates: &[(String, String)]) -> Result<(), 
     let mut contents = if path.exists() {
         fs::read_to_string(&path).map_err(|e| format!("failed to read .env.instagram: {e}"))?
     } else if example.exists() {
-        fs::read_to_string(&example).map_err(|e| format!("failed to read .env.instagram.example: {e}"))?
+        fs::read_to_string(&example)
+            .map_err(|e| format!("failed to read .env.instagram.example: {e}"))?
     } else {
         String::new()
     };
@@ -577,7 +594,9 @@ fn build_instagram_status(root: &Path) -> Value {
     if !config.has_access_token {
         issues.push("IG_ACCESS_TOKEN missing".to_string());
     }
-    if config.media_public_base_url.trim().is_empty() && config.minio_public_endpoint.trim().is_empty() {
+    if config.media_public_base_url.trim().is_empty()
+        && config.minio_public_endpoint.trim().is_empty()
+    {
         issues.push("public media endpoint missing".to_string());
     }
 
@@ -770,10 +789,10 @@ fn build_dependency_views(root: &Path, settings: &AppSettings) -> Vec<DevPulseDe
     };
     let database_url = env_lookup(&env_entries, "DATABASE_URL")
         .unwrap_or_else(|| "postgresql://devpulse:devpulse@localhost:5434/devpulse".to_string());
-    let minio_endpoint =
-        env_lookup(&env_entries, "MINIO_ENDPOINT").unwrap_or_else(|| "http://localhost:9000".to_string());
-    let qdrant_url =
-        env_lookup(&env_entries, "QDRANT_URL").unwrap_or_else(|| "http://localhost:6333".to_string());
+    let minio_endpoint = env_lookup(&env_entries, "MINIO_ENDPOINT")
+        .unwrap_or_else(|| "http://localhost:9000".to_string());
+    let qdrant_url = env_lookup(&env_entries, "QDRANT_URL")
+        .unwrap_or_else(|| "http://localhost:6333".to_string());
 
     let python = python_bin(root);
     let python_target = python.display().to_string();
@@ -784,13 +803,17 @@ fn build_dependency_views(root: &Path, settings: &AppSettings) -> Vec<DevPulseDe
     };
 
     let database_target = database_url.clone();
-    let database_probe = parse_database_host_port(&database_url).and_then(|(host, port)| probe_socket(&host, port));
+    let database_probe =
+        parse_database_host_port(&database_url).and_then(|(host, port)| probe_socket(&host, port));
     let minio_target = minio_endpoint.clone();
-    let minio_probe = parse_url_host_port(&minio_endpoint).and_then(|(host, port)| probe_socket(&host, port));
+    let minio_probe =
+        parse_url_host_port(&minio_endpoint).and_then(|(host, port)| probe_socket(&host, port));
     let qdrant_target = qdrant_url.clone();
-    let qdrant_probe = parse_url_host_port(&qdrant_url).and_then(|(host, port)| probe_socket(&host, port));
+    let qdrant_probe =
+        parse_url_host_port(&qdrant_url).and_then(|(host, port)| probe_socket(&host, port));
     let llm_target = llm_base_url.clone();
-    let llm_probe = parse_url_host_port(&llm_base_url).and_then(|(host, port)| probe_socket(&host, port));
+    let llm_probe =
+        parse_url_host_port(&llm_base_url).and_then(|(host, port)| probe_socket(&host, port));
 
     vec![
         dependency_view("python", "Python", python_target, python_probe),
@@ -839,9 +862,7 @@ fn docker_available(settings: &AppSettings) -> Result<(), String> {
 fn docker_daemon_ready(settings: &AppSettings) -> Result<(), String> {
     let program = docker_program(settings);
     let mut cmd = Command::new(program);
-    cmd.arg("info")
-        .stdout(Stdio::null())
-        .stderr(Stdio::piped());
+    cmd.arg("info").stdout(Stdio::null()).stderr(Stdio::piped());
 
     run_command_output(cmd, DOCKER_PROBE_TIMEOUT, "docker info").and_then(|output| {
         if output.status.success() {
@@ -1218,11 +1239,7 @@ fn run_cli_json(
         .map_err(|e| format!("invalid devPulse command json: {e}"))
 }
 
-fn run_command_output(
-    mut cmd: Command,
-    timeout: Duration,
-    label: &str,
-) -> Result<Output, String> {
+fn run_command_output(mut cmd: Command, timeout: Duration, label: &str) -> Result<Output, String> {
     let mut child = cmd
         .spawn()
         .map_err(|e| format!("failed to start {label}: {e}"))?;
@@ -1379,9 +1396,9 @@ async fn spawn_run_now(
     let result = tauri::async_runtime::spawn_blocking(move || {
         run_cli_json(&root, &settings, &args, bridge_dir.as_deref())
     })
-            .await
-            .map_err(|e| e.to_string())
-            .and_then(|res| res);
+    .await
+    .map_err(|e| e.to_string())
+    .and_then(|res| res);
 
     if let Ok(mut runtime) = runtime_state.0.lock() {
         runtime.run_in_flight = false;
@@ -1571,8 +1588,14 @@ pub fn update_devpulse_sns_config(
     let root = resolve_root(&settings)?;
     let current = build_instagram_config_view(&root);
     let updates = vec![
-        ("IG_APP_ID".to_string(), args.app_id.unwrap_or(current.app_id)),
-        ("IG_USER_ID".to_string(), args.user_id.unwrap_or(current.user_id)),
+        (
+            "IG_APP_ID".to_string(),
+            args.app_id.unwrap_or(current.app_id),
+        ),
+        (
+            "IG_USER_ID".to_string(),
+            args.user_id.unwrap_or(current.user_id),
+        ),
         (
             "IG_ACCESS_TOKEN".to_string(),
             args.access_token
@@ -1602,12 +1625,21 @@ pub fn update_devpulse_sns_config(
         ),
         (
             "IG_REELS_PER_DAY".to_string(),
-            args.reels_per_day.unwrap_or(current.reels_per_day).clamp(1, 24).to_string(),
+            args.reels_per_day
+                .unwrap_or(current.reels_per_day)
+                .clamp(1, 24)
+                .to_string(),
         ),
-        ("IG_TIMEZONE".to_string(), args.timezone.unwrap_or(current.timezone)),
+        (
+            "IG_TIMEZONE".to_string(),
+            args.timezone.unwrap_or(current.timezone),
+        ),
         (
             "IG_POLL_SEC".to_string(),
-            args.poll_sec.unwrap_or(current.poll_sec).clamp(10, 3600).to_string(),
+            args.poll_sec
+                .unwrap_or(current.poll_sec)
+                .clamp(10, 3600)
+                .to_string(),
         ),
         (
             "IG_GRAPH_VERSION".to_string(),
@@ -1615,19 +1647,29 @@ pub fn update_devpulse_sns_config(
         ),
         (
             "IG_MEDIA_PORT".to_string(),
-            args.media_port.unwrap_or(current.media_port).clamp(1, 65535).to_string(),
+            args.media_port
+                .unwrap_or(current.media_port)
+                .clamp(1, 65535)
+                .to_string(),
         ),
         (
             "IG_MEDIA_PUBLIC_BASE_URL".to_string(),
-            args.media_public_base_url.unwrap_or(current.media_public_base_url),
+            args.media_public_base_url
+                .unwrap_or(current.media_public_base_url),
         ),
         (
             "MINIO_PUBLIC_ENDPOINT".to_string(),
-            args.minio_public_endpoint.unwrap_or(current.minio_public_endpoint),
+            args.minio_public_endpoint
+                .unwrap_or(current.minio_public_endpoint),
         ),
         (
             "IG_DRY_RUN".to_string(),
-            if args.dry_run.unwrap_or(current.dry_run) { "1" } else { "0" }.to_string(),
+            if args.dry_run.unwrap_or(current.dry_run) {
+                "1"
+            } else {
+                "0"
+            }
+            .to_string(),
         ),
     ];
     write_instagram_env(&root, &updates)?;
@@ -1798,8 +1840,8 @@ pub async fn run_devpulse_now(
     let result = tauri::async_runtime::spawn_blocking(move || {
         run_cli_json(&root, &settings, &args, bridge_dir.as_deref())
     })
-            .await
-            .map_err(|e| e.to_string())?;
+    .await
+    .map_err(|e| e.to_string())?;
 
     let mut runtime = runtime_state.0.lock().map_err(|e| e.to_string())?;
     runtime.run_in_flight = false;
@@ -1870,9 +1912,10 @@ pub async fn check_devpulse_sns(
 
     let settings = settings_state.0.read().map_err(|e| e.to_string())?.clone();
     let root = resolve_root(&settings)?;
-    let result = tauri::async_runtime::spawn_blocking(move || run_instagram_poster(&root, &["--check"]))
-        .await
-        .map_err(|e| e.to_string())?;
+    let result =
+        tauri::async_runtime::spawn_blocking(move || run_instagram_poster(&root, &["--check"]))
+            .await
+            .map_err(|e| e.to_string())?;
 
     let mut runtime = runtime_state.0.lock().map_err(|e| e.to_string())?;
     runtime.sns_in_flight = false;
@@ -1900,9 +1943,10 @@ pub async fn run_devpulse_sns_now(
 
     let settings = settings_state.0.read().map_err(|e| e.to_string())?.clone();
     let root = resolve_root(&settings)?;
-    let result = tauri::async_runtime::spawn_blocking(move || run_instagram_poster(&root, &["--once"]))
-        .await
-        .map_err(|e| e.to_string())?;
+    let result =
+        tauri::async_runtime::spawn_blocking(move || run_instagram_poster(&root, &["--once"]))
+            .await
+            .map_err(|e| e.to_string())?;
 
     let mut runtime = runtime_state.0.lock().map_err(|e| e.to_string())?;
     runtime.sns_in_flight = false;
@@ -1966,25 +2010,33 @@ pub fn default_devpulse_feeds() -> Vec<String> {
 }
 
 #[tauri::command]
-pub fn pick_devpulse_root_dir(
+pub async fn pick_devpulse_root_dir(
     app: AppHandle,
-    state: State<SettingsState>,
+    state: State<'_, SettingsState>,
 ) -> Result<DevPulseConfigView, String> {
-    let picked = app
-        .dialog()
+    let (tx, rx) = tokio::sync::oneshot::channel();
+    app.dialog()
         .file()
         .set_title("Select devPulse project folder")
-        .blocking_pick_folder();
+        .pick_folder(move |picked| {
+            let result = picked
+                .map(|file_path| {
+                    file_path
+                        .into_path()
+                        .map_err(|e| format!("invalid folder path: {e}"))
+                })
+                .transpose();
+            let _ = tx.send(result);
+        });
+    let picked = rx
+        .await
+        .map_err(|_| "folder picker was cancelled unexpectedly".to_string())??;
 
-    let Some(file_path) = picked else {
+    let Some(path_buf) = picked else {
         let settings = state.0.read().map_err(|e| e.to_string())?.clone();
         let root = try_resolve_root(&settings);
         return Ok(build_config_view(&settings, root.as_deref()));
     };
-
-    let path_buf: PathBuf = file_path
-        .into_path()
-        .map_err(|e| format!("invalid folder path: {e}"))?;
 
     let mut settings = state.0.write().map_err(|e| e.to_string())?;
     settings.devpulse_root_dir = path_buf.display().to_string();

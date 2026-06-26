@@ -133,7 +133,8 @@ function AppContent({
 }) {
   const isChecklistPopup =
     typeof window !== "undefined" &&
-    new URLSearchParams(window.location.search).get("mode") === "checklist";
+    (new URLSearchParams(window.location.search).get("mode") === "checklist" ||
+      window.location.hash === "#checklist");
   if (isChecklistPopup) {
     return (
       <Suspense fallback={<MascotScene mood="loading" title="Checklist" size="md" />}>

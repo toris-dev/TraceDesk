@@ -2595,6 +2595,45 @@ input {
   font-size: 0.82rem;
 }
 
+.checklist-empty-rich {
+  display: grid;
+  gap: 0.65rem;
+}
+
+.checklist-empty-rich strong {
+  color: var(--td-text);
+  font-family: var(--cyber-font-display);
+  font-size: 0.95rem;
+}
+
+.checklist-empty-rich span {
+  line-height: 1.5;
+}
+
+.checklist-quick-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+.checklist-quick-button {
+  border: 1px solid var(--cyber-panel-border);
+  background: rgb(0 229 255 / 0.07);
+  color: var(--td-text);
+  padding: 0.55rem 0.7rem;
+  font-size: 0.75rem;
+  transition:
+    border-color 0.2s ease,
+    color 0.2s ease,
+    box-shadow 0.2s ease;
+}
+
+.checklist-quick-button:hover {
+  border-color: var(--cyber-cyan);
+  color: var(--cyber-cyan);
+  box-shadow: 0 0 14px var(--cyber-cyan-dim);
+}
+
 .checklist-error {
   border-color: rgb(255 77 109 / 0.3);
   color: var(--td-danger-text);
