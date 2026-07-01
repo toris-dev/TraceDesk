@@ -58,9 +58,6 @@ const AIChatView = lazy(() =>
 const ChecklistView = lazy(() =>
   import("./views/ChecklistView").then((m) => ({ default: m.ChecklistView })),
 );
-const DevPulseView = lazy(() =>
-  import("./views/DevPulseView").then((m) => ({ default: m.DevPulseView })),
-);
 const CyberCommandCenter = lazy(() =>
   import("./components/cyber/CyberCommandCenter").then((m) => ({ default: m.CyberCommandCenter })),
 );
@@ -144,7 +141,7 @@ function AppContent({
   }
 
   const { locale, t } = useI18n();
-  const [page, setPage] = useState<DashboardPage>("pulse");
+  const [page, setPage] = useState<DashboardPage>("checklist");
   const [selectedDate, setSelectedDate] = useState(todayISO);
   const [availableDates, setAvailableDates] = useState<string[]>([]);
   const [stats, setStats] = useState<DailyStatistics | null>(null);
@@ -165,6 +162,9 @@ function AppContent({
   const [exportNotice, setExportNotice] = useState<string | null>(null);
   const [updateNotice, setUpdateNotice] = useState<UpdateCheckResult | null>(null);
   const [checkingUpdate, setCheckingUpdate] = useState(false);
+  const [pageVisible, setPageVisible] = useState(
+    typeof document === "undefined" ? true : document.visibilityState === "visible",
+  );
   const loadInflight = useRef(false);
 
   const loadAvailableDates = useCallback(async () => {
@@ -252,6 +252,20 @@ function AppContent({
   }, [appSettings.setup_completed, runUpdateCheck]);
 
   useEffect(() => {
+    const onVisibilityChange = () => {
+      setPageVisible(document.visibilityState === "visible");
+    };
+    document.addEventListener("visibilitychange", onVisibilityChange);
+    window.addEventListener("focus", onVisibilityChange);
+    window.addEventListener("blur", onVisibilityChange);
+    return () => {
+      document.removeEventListener("visibilitychange", onVisibilityChange);
+      window.removeEventListener("focus", onVisibilityChange);
+      window.removeEventListener("blur", onVisibilityChange);
+    };
+  }, []);
+
+  useEffect(() => {
     let unlisten: (() => void) | undefined;
     subscribeMenuEvents({
       onNavigate: (p) => {
@@ -293,7 +307,10 @@ function AppContent({
 
   useEffect(() => {
     if (!isActivityPage(page) || !isToday(selectedDate)) return;
-    const intervalMs = activityRefreshInterval(page);
+    const intervalMs =
+      activityRefreshInterval(page) *
+      (appSettings.performance_mode ? 2 : 1) *
+      (pageVisible ? 1 : 4);
     const id = setInterval(() => {
       loadData(selectedDate, true);
       if (page !== "monitor") {
@@ -301,7 +318,7 @@ function AppContent({
       }
     }, intervalMs);
     return () => clearInterval(id);
-  }, [selectedDate, page, loadData, loadAvailableDates]);
+  }, [selectedDate, page, appSettings.performance_mode, pageVisible, loadData, loadAvailableDates]);
 
   useEffect(() => {
     if (page !== "analytics") {
@@ -312,7 +329,7 @@ function AppContent({
   }, [page, selectedDate, loadWeeklyReport]);
 
   useEffect(() => {
-    if (!isActivityPage(page) || !isToday(selectedDate)) return;
+    if (!pageVisible || !isActivityPage(page) || !isToday(selectedDate)) return;
 
     let unlisten: (() => void) | undefined;
     subscribeActivityEvents((item) => {
@@ -347,7 +364,7 @@ function AppContent({
     return () => {
       unlisten?.();
     };
-  }, [page, selectedDate]);
+  }, [page, selectedDate, pageVisible]);
 
   const viewingToday = isToday(selectedDate);
   const dateLabel = viewingToday
@@ -654,12 +671,6 @@ function AppContent({
               onDateChange={setSelectedDate}
               onOpenSettings={() => setPage("settings")}
             />
-          </Suspense>
-        )}
-
-        {page === "pulse" && (
-          <Suspense fallback={<MascotScene mood="loading" title={t("nav.pulse")} size="md" />}>
-            <DevPulseView />
           </Suspense>
         )}
 

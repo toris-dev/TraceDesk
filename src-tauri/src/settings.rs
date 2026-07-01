@@ -4,7 +4,6 @@ use std::fs;
 use std::path::PathBuf;
 
 use crate::archive::DEFAULT_RETENTION_DAYS;
-use crate::devpulse::default_devpulse_feeds;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 struct InstallSeed {
@@ -69,28 +68,6 @@ pub struct AppSettings {
     /// 마지막 연결 테스트 성공 여부
     #[serde(default)]
     pub llm_connected: bool,
-    #[serde(default)]
-    pub devpulse_root_dir: String,
-    #[serde(default)]
-    pub devpulse_docker_cli_path: String,
-    #[serde(default)]
-    pub devpulse_cron_enabled: bool,
-    #[serde(default = "default_devpulse_cron_expr")]
-    pub devpulse_cron_expr: String,
-    #[serde(default = "default_devpulse_feeds")]
-    pub devpulse_feeds: Vec<String>,
-    #[serde(default)]
-    pub devpulse_topic_filters: Vec<String>,
-    #[serde(default = "default_devpulse_batch_size")]
-    pub devpulse_batch_size: u32,
-    #[serde(default = "default_devpulse_collect_limit")]
-    pub devpulse_collect_limit: u32,
-    #[serde(default = "default_devpulse_idle_poll_sec")]
-    pub devpulse_idle_poll_sec: u32,
-    #[serde(default)]
-    pub devpulse_backlog_pause_sec: u32,
-    #[serde(default = "default_devpulse_bundle_size")]
-    pub devpulse_bundle_size: u32,
     #[serde(default)]
     pub checklist_items: Vec<ChecklistItem>,
 }
@@ -163,26 +140,6 @@ fn default_theme() -> String {
     "dark".into()
 }
 
-fn default_devpulse_cron_expr() -> String {
-    "0 9 * * *".into()
-}
-
-fn default_devpulse_batch_size() -> u32 {
-    5
-}
-
-fn default_devpulse_collect_limit() -> u32 {
-    0
-}
-
-fn default_devpulse_idle_poll_sec() -> u32 {
-    90
-}
-
-fn default_devpulse_bundle_size() -> u32 {
-    6
-}
-
 pub fn normalize_theme(value: &str) -> String {
     if value == "light" {
         "light".into()
@@ -211,17 +168,6 @@ impl Default for AppSettings {
             ollama_base_url: default_ollama_url(),
             api_base_url: default_api_base_url(),
             llm_connected: false,
-            devpulse_root_dir: String::new(),
-            devpulse_docker_cli_path: String::new(),
-            devpulse_cron_enabled: false,
-            devpulse_cron_expr: default_devpulse_cron_expr(),
-            devpulse_feeds: default_devpulse_feeds(),
-            devpulse_topic_filters: Vec::new(),
-            devpulse_batch_size: default_devpulse_batch_size(),
-            devpulse_collect_limit: default_devpulse_collect_limit(),
-            devpulse_idle_poll_sec: default_devpulse_idle_poll_sec(),
-            devpulse_backlog_pause_sec: 0,
-            devpulse_bundle_size: default_devpulse_bundle_size(),
             checklist_items: Vec::new(),
         }
     }

@@ -9,9 +9,9 @@ import {
 
 const CHECKLIST_EVENT = "checklist-updated";
 const QUICK_TASKS = [
-  "Pulse 저장 경로 확인",
-  "오늘 devPulse 실행 결과 확인",
-  "카드/영상 산출물 점검",
+  "오늘 행동 기록 확인",
+  "AI 채팅 세션 정리",
+  "체크리스트 팝업 정리",
 ];
 
 function makeItem(title: string): ChecklistItem {
@@ -21,6 +21,21 @@ function makeItem(title: string): ChecklistItem {
     done: false,
     created_at: new Date().toISOString(),
   };
+}
+
+function parseChecklistDraft(value: string): ChecklistItem[] {
+  return value
+    .split(/\r?\n/)
+    .map((line) =>
+      line
+        .trim()
+        .replace(/^[-*]\s+\[[ xX]\]\s*/, "")
+        .replace(/^[-*]\s+/, "")
+        .replace(/^\d+[.)]\s+/, "")
+        .trim(),
+    )
+    .filter(Boolean)
+    .map(makeItem);
 }
 
 function ratio(items: ChecklistItem[]) {
@@ -82,10 +97,10 @@ export function ChecklistView({ popup = false }: { popup?: boolean }) {
   const completion = ratio(items);
 
   const addItem = useCallback(async () => {
-    const title = draft.trim();
-    if (!title) return;
+    const nextItems = parseChecklistDraft(draft);
+    if (nextItems.length === 0) return;
     setDraft("");
-    await commit([makeItem(title), ...items]);
+    await commit([...nextItems, ...items]);
   }, [commit, draft, items]);
 
   return (
@@ -98,7 +113,7 @@ export function ChecklistView({ popup = false }: { popup?: boolean }) {
             <p className="checklist-subtitle">
               {popup
                 ? "다른 앱 위에 고정된 상태로 오늘 처리할 작업을 하나씩 끝낼 수 있습니다."
-                : "Pulse 실행과 디자인 수정 중 필요한 작업을 고정된 투두 보드로 관리합니다."}
+                : "오늘 처리할 작업을 고정된 투두 보드로 관리합니다."}
             </p>
           </div>
           {!popup && (
@@ -138,17 +153,18 @@ export function ChecklistView({ popup = false }: { popup?: boolean }) {
 
       <section className="td-panel checklist-board">
         <div className="checklist-input-row">
-          <input
+          <textarea
             value={draft}
             onChange={(event) => setDraft(event.target.value)}
             onKeyDown={(event) => {
-              if (event.key === "Enter") {
+              if (event.key === "Enter" && (event.metaKey || event.ctrlKey)) {
                 event.preventDefault();
                 void addItem();
               }
             }}
             className="checklist-input"
-            placeholder="새 작업 추가"
+            rows={3}
+            placeholder={"새 작업 추가\n- [ ] 여러 줄을 붙여넣으면 각 줄이 개별 작업으로 등록됩니다"}
           />
           <button type="button" onClick={() => void addItem()} className="checklist-add-button">
             추가

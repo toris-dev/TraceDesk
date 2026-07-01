@@ -17,13 +17,12 @@ const NAV_ITEMS: NavItem[] = [
   { id: "checklist", code: "01", labelKey: "nav.checklist", descKey: "nav.checklistDesc", group: "command" },
   { id: "monitor", code: "02", labelKey: "nav.monitor", descKey: "nav.monitorDesc", group: "command" },
   { id: "ai", code: "03", labelKey: "nav.ai", descKey: "nav.aiDesc", group: "command" },
-  { id: "pulse", code: "04", labelKey: "nav.pulse", descKey: "nav.pulseDesc", group: "command" },
-  { id: "journal", code: "05", labelKey: "nav.journal", descKey: "nav.journalDesc", group: "record" },
-  { id: "overview", code: "06", labelKey: "nav.overview", descKey: "nav.overviewDesc", group: "record" },
-  { id: "actions", code: "07", labelKey: "nav.actions", descKey: "nav.actionsDesc", group: "record" },
-  { id: "timeline", code: "08", labelKey: "nav.timeline", descKey: "nav.timelineDesc", group: "record" },
-  { id: "analytics", code: "09", labelKey: "nav.analytics", descKey: "nav.analyticsDesc", group: "record" },
-  { id: "settings", code: "10", labelKey: "nav.settings", descKey: "nav.settingsDesc", group: "config" },
+  { id: "journal", code: "04", labelKey: "nav.journal", descKey: "nav.journalDesc", group: "record" },
+  { id: "overview", code: "05", labelKey: "nav.overview", descKey: "nav.overviewDesc", group: "record" },
+  { id: "actions", code: "06", labelKey: "nav.actions", descKey: "nav.actionsDesc", group: "record" },
+  { id: "timeline", code: "07", labelKey: "nav.timeline", descKey: "nav.timelineDesc", group: "record" },
+  { id: "analytics", code: "08", labelKey: "nav.analytics", descKey: "nav.analyticsDesc", group: "record" },
+  { id: "settings", code: "09", labelKey: "nav.settings", descKey: "nav.settingsDesc", group: "config" },
 ];
 
 const GROUP_ORDER: NavItem["group"][] = ["command", "record", "config"];

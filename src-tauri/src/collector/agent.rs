@@ -10,11 +10,14 @@ use chrono::{Local, Utc};
 use serde_json::json;
 use std::path::PathBuf;
 use std::sync::Arc;
-use std::time::Duration;
+use std::time::{Duration, Instant};
 use tauri::AppHandle;
 use tokio::sync::watch;
 
-const POLL_INTERVAL: Duration = Duration::from_secs(1);
+const DEFAULT_POLL_INTERVAL: Duration = Duration::from_secs(2);
+const LIGHTWEIGHT_POLL_INTERVAL: Duration = Duration::from_secs(4);
+const SETTINGS_REFRESH_INTERVAL: Duration = Duration::from_secs(30);
+const INPUT_RECV_TIMEOUT: Duration = Duration::from_millis(750);
 const IDLE_THRESHOLD_SECS: u64 = 300;
 const SUMMARY_INTERVAL: Duration = Duration::from_secs(300);
 const SCREENSHOT_QUEUE_CAP: usize = 16;
@@ -56,6 +59,20 @@ impl CollectorAgent {
             .unwrap_or(false)
     }
 
+    fn poll_interval(&self) -> Duration {
+        self.settings
+            .0
+            .read()
+            .map(|s| {
+                if s.performance_mode {
+                    LIGHTWEIGHT_POLL_INTERVAL
+                } else {
+                    DEFAULT_POLL_INTERVAL
+                }
+            })
+            .unwrap_or(DEFAULT_POLL_INTERVAL)
+    }
+
     pub async fn run(
         self,
         mut shutdown: watch::Receiver<bool>,
@@ -79,14 +96,21 @@ impl CollectorAgent {
         let mut current_title: Option<String> = None;
         let mut session_start = Utc::now();
         let mut is_idle = false;
-        let mut last_summary = std::time::Instant::now();
+        let mut last_summary = Instant::now();
+        let mut poll_interval = self.poll_interval();
+        let mut last_settings_refresh = Instant::now();
 
         loop {
             if *shutdown.borrow() {
                 break;
             }
 
-            match input_rx.recv_timeout(Duration::from_millis(250)) {
+            if last_settings_refresh.elapsed() >= SETTINGS_REFRESH_INTERVAL {
+                poll_interval = self.poll_interval();
+                last_settings_refresh = Instant::now();
+            }
+
+            match input_rx.recv_timeout(INPUT_RECV_TIMEOUT) {
                 Ok(event) => {
                     self.process_input_event(event)?;
                     while let Ok(event) = input_rx.try_recv() {
@@ -155,7 +179,7 @@ impl CollectorAgent {
             }
 
             tokio::select! {
-                _ = tokio::time::sleep(POLL_INTERVAL) => {},
+                _ = tokio::time::sleep(poll_interval) => {},
                 _ = shutdown.changed() => {
                     if *shutdown.borrow() {
                         break;

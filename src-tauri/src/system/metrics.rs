@@ -2,13 +2,12 @@ use crate::system::ports::{self, PortInfo};
 use anyhow::Result;
 use chrono::Utc;
 use serde::Serialize;
-use std::sync::{Mutex, MutexGuard};
 use std::time::{Duration, Instant};
 use sysinfo::{Pid, ProcessesToUpdate, System};
 
-const PROCESS_REFRESH_EVERY: u64 = 6;
-const PORTS_REFRESH_SECS: u64 = 30;
-const TOP_PROCESS_LIMIT: usize = 15;
+const PROCESS_REFRESH_EVERY: u64 = 12;
+const PORTS_REFRESH_SECS: u64 = 120;
+const TOP_PROCESS_LIMIT: usize = 8;
 
 #[derive(Debug, Clone, Serialize)]
 pub struct MemoryInfo {
@@ -168,10 +167,6 @@ fn process_info(pid: u32, proc_: &sysinfo::Process) -> ProcessInfo {
         cpu_percent: proc_.cpu_usage(),
         memory_mb: proc_.memory() / 1024 / 1024,
     }
-}
-
-pub fn lock_monitor<'a>(mon: &'a Mutex<SystemMonitor>) -> MutexGuard<'a, SystemMonitor> {
-    mon.lock().expect("system monitor mutex poisoned")
 }
 
 pub fn create_monitor() -> SystemMonitor {

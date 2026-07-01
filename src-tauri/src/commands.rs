@@ -10,7 +10,7 @@ use crate::events::{ActivityEvent, EventType};
 use crate::os::{self, PermissionStatus};
 use crate::settings_commands::{filter_permissions_by_settings, SettingsState};
 use crate::state::AppState;
-use crate::system::{collect_snapshot, lock_monitor, SystemSnapshot};
+use crate::system::{collect_snapshot, create_monitor, SystemSnapshot};
 use chrono::{Local, NaiveDate};
 use serde::Serialize;
 use tauri::{Manager, State};
@@ -374,8 +374,12 @@ pub fn open_permission_settings(id: String) -> Result<(), String> {
 
 #[tauri::command]
 pub fn get_system_snapshot(state: State<AppState>) -> Result<SystemSnapshot, String> {
-    let mut mon = lock_monitor(&state.system);
-    collect_snapshot(&mut mon).map_err(|e| e.to_string())
+    let mut mon = state
+        .system
+        .lock()
+        .map_err(|_| "system monitor mutex poisoned".to_string())?;
+    let mon = mon.get_or_insert_with(create_monitor);
+    collect_snapshot(mon).map_err(|e| e.to_string())
 }
 
 #[tauri::command]

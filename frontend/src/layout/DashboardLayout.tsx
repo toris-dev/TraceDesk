@@ -1,4 +1,5 @@
-import { type ReactNode } from "react";
+import { type ReactNode, useEffect, useState } from "react";
+import { getCurrentWindow } from "@tauri-apps/api/window";
 import { AppLogo } from "../components/AppLogo";
 import { MASCOT_ICON_SRC } from "../components/mascot";
 import { useI18n } from "../i18n";
@@ -13,7 +14,6 @@ export type DashboardPage =
   | "timeline"
   | "analytics"
   | "ai"
-  | "pulse"
   | "settings";
 
 const DASHBOARD_PAGES: DashboardPage[] = [
@@ -25,7 +25,6 @@ const DASHBOARD_PAGES: DashboardPage[] = [
   "timeline",
   "analytics",
   "ai",
-  "pulse",
   "settings",
 ];
 
@@ -60,6 +59,46 @@ export function DashboardLayout({
 }: Props) {
   const { t } = useI18n();
   const current = SIDEBAR_NAV_ITEMS.find((n) => n.id === page);
+  const [isMaximized, setIsMaximized] = useState(false);
+
+  useEffect(() => {
+    const appWindow = getCurrentWindow();
+    let unlisten: (() => void) | undefined;
+
+    appWindow
+      .isMaximized()
+      .then(setIsMaximized)
+      .catch(() => {});
+    appWindow
+      .onResized(() => {
+        void appWindow.isMaximized().then(setIsMaximized).catch(() => {});
+      })
+      .then((fn) => {
+        unlisten = fn;
+      })
+      .catch(() => {});
+
+    return () => {
+      unlisten?.();
+    };
+  }, []);
+
+  const minimizeWindow = () => {
+    void getCurrentWindow().minimize().catch(() => {});
+  };
+
+  const toggleMaximizeWindow = () => {
+    const appWindow = getCurrentWindow();
+    void appWindow
+      .toggleMaximize()
+      .then(() => appWindow.isMaximized())
+      .then(setIsMaximized)
+      .catch(() => {});
+  };
+
+  const closeWindow = () => {
+    void getCurrentWindow().close().catch(() => {});
+  };
 
   return (
     <div className="h-screen flex overflow-hidden cyber-shell">
@@ -72,12 +111,31 @@ export function DashboardLayout({
       />
 
       <div className="flex-1 flex flex-col min-w-0 min-h-0">
-        <header className="shrink-0 z-20 border-b cyber-header cyber-topbar backdrop-blur-md">
-          <div className="px-4 py-4 md:px-8 flex items-center justify-between gap-4 md:flex-nowrap cyber-topbar-inner">
+        <header className="shrink-0 z-20 border-b cyber-header cyber-topbar backdrop-blur-md" data-tauri-drag-region>
+          <div className="cyber-window-command-strip" data-tauri-drag-region>
+            <div className="cyber-window-command-left" data-tauri-drag-region>
+              <span className="cyber-window-signal" aria-hidden="true" />
+              <span className="cyber-window-title" data-tauri-drag-region>TraceDesk</span>
+              <span className="cyber-window-mode" data-tauri-drag-region>LOCAL ACTIVITY OS</span>
+            </div>
+            <div className="cyber-window-controls" aria-label="Window controls">
+              <button type="button" onClick={minimizeWindow} aria-label="Minimize window">
+                <span aria-hidden="true">-</span>
+              </button>
+              <button type="button" onClick={toggleMaximizeWindow} aria-label={isMaximized ? "Restore window" : "Maximize window"}>
+                <span aria-hidden="true">{isMaximized ? "❐" : "□"}</span>
+              </button>
+              <button type="button" className="is-close" onClick={closeWindow} aria-label="Close window">
+                <span aria-hidden="true">×</span>
+              </button>
+            </div>
+          </div>
+
+          <div className="px-4 py-3 md:px-8 flex items-center justify-between gap-4 md:flex-nowrap cyber-topbar-inner" data-tauri-drag-region>
             <div className="md:hidden">
               <AppLogo subtitle={subtitle} />
             </div>
-            <div className="hidden min-w-0 flex-1 md:block">
+            <div className="hidden min-w-0 flex-1 md:block" data-tauri-drag-region>
               <p className="cyber-window-kicker whitespace-nowrap">TRACEDESK / LOCAL ACTIVITY OS</p>
               <h2 className="truncate whitespace-nowrap text-[1.05rem] font-display font-semibold text-[var(--cyber-cyan)]">
                 {current ? t(current.labelKey) : ""}
