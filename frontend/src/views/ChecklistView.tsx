@@ -14,11 +14,11 @@ const QUICK_TASKS = [
   "체크리스트 팝업 정리",
 ];
 
-function makeItem(title: string): ChecklistItem {
+function makeItem(title: string, done = false): ChecklistItem {
   return {
     id: `todo-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 7)}`,
     title,
-    done: false,
+    done,
     created_at: new Date().toISOString(),
   };
 }
@@ -26,16 +26,23 @@ function makeItem(title: string): ChecklistItem {
 function parseChecklistDraft(value: string): ChecklistItem[] {
   return value
     .split(/\r?\n/)
-    .map((line) =>
-      line
-        .trim()
-        .replace(/^[-*]\s+\[[ xX]\]\s*/, "")
-        .replace(/^[-*]\s+/, "")
-        .replace(/^\d+[.)]\s+/, "")
-        .trim(),
-    )
-    .filter(Boolean)
-    .map(makeItem);
+    .map((line) => {
+      let title = line.trim();
+      let done = false;
+      const checkbox = title.match(/^[-*]\s+\[([ xX])\]\s*(.*)$/);
+      if (checkbox) {
+        done = checkbox[1].toLowerCase() === "x";
+        title = checkbox[2].trim();
+      } else {
+        title = title
+          .replace(/^[-*]\s+/, "")
+          .replace(/^\d+[.)]\s+/, "")
+          .trim();
+      }
+      return { title, done };
+    })
+    .filter((item) => item.title)
+    .map((item) => makeItem(item.title, item.done));
 }
 
 function ratio(items: ChecklistItem[]) {
@@ -46,6 +53,7 @@ function ratio(items: ChecklistItem[]) {
 export function ChecklistView({ popup = false }: { popup?: boolean }) {
   const [items, setItems] = useState<ChecklistItem[]>([]);
   const [draft, setDraft] = useState("");
+  const [hideDone, setHideDone] = useState(false);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -95,6 +103,10 @@ export function ChecklistView({ popup = false }: { popup?: boolean }) {
 
   const completed = useMemo(() => items.filter((item) => item.done).length, [items]);
   const completion = ratio(items);
+  const visibleItems = useMemo(
+    () => (hideDone ? items.filter((item) => !item.done) : items),
+    [hideDone, items],
+  );
 
   const addItem = useCallback(async () => {
     const nextItems = parseChecklistDraft(draft);
@@ -102,6 +114,11 @@ export function ChecklistView({ popup = false }: { popup?: boolean }) {
     setDraft("");
     await commit([...nextItems, ...items]);
   }, [commit, draft, items]);
+
+  const clearCompleted = useCallback(async () => {
+    if (completed === 0) return;
+    await commit(items.filter((item) => !item.done));
+  }, [commit, completed, items]);
 
   return (
     <div className={popup ? "checklist-popup-shell" : "checklist-page"}>
@@ -173,6 +190,27 @@ export function ChecklistView({ popup = false }: { popup?: boolean }) {
 
         {error && <div className="checklist-error">{error}</div>}
 
+        {items.length > 0 && (
+          <div className="checklist-tools">
+            <label className="checklist-hide-done">
+              <input
+                type="checkbox"
+                checked={hideDone}
+                onChange={(event) => setHideDone(event.target.checked)}
+              />
+              <span>완료 항목 숨기기</span>
+            </label>
+            <button
+              type="button"
+              className="checklist-clear-completed"
+              onClick={() => void clearCompleted()}
+              disabled={completed === 0 || saving}
+            >
+              완료 정리
+            </button>
+          </div>
+        )}
+
         {loading ? (
           <div className="checklist-empty">불러오는 중…</div>
         ) : items.length === 0 ? (
@@ -194,7 +232,10 @@ export function ChecklistView({ popup = false }: { popup?: boolean }) {
           </div>
         ) : (
           <div className="checklist-list">
-            {items.map((item, index) => (
+            {visibleItems.length === 0 && (
+              <div className="checklist-empty">숨긴 완료 항목만 남아 있습니다.</div>
+            )}
+            {visibleItems.map((item, index) => (
               <div key={item.id} className={`checklist-row ${item.done ? "is-done" : ""}`}>
                 <button
                   type="button"

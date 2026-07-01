@@ -2329,6 +2329,51 @@ input {
   align-self: stretch;
 }
 
+.checklist-tools {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  margin-bottom: 1rem;
+}
+
+.checklist-hide-done {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  color: var(--td-text-muted);
+  font-size: 0.78rem;
+  cursor: pointer;
+}
+
+.checklist-hide-done input {
+  width: 1rem;
+  height: 1rem;
+  accent-color: var(--cyber-green);
+}
+
+.checklist-clear-completed {
+  border: 1px solid var(--cyber-panel-border);
+  background: rgb(0 229 255 / 0.07);
+  color: var(--td-text);
+  padding: 0.55rem 0.7rem;
+  font-size: 0.75rem;
+  transition:
+    border-color 0.2s ease,
+    color 0.2s ease,
+    opacity 0.2s ease;
+}
+
+.checklist-clear-completed:hover:not(:disabled) {
+  border-color: var(--cyber-green);
+  color: var(--cyber-green);
+}
+
+.checklist-clear-completed:disabled {
+  cursor: not-allowed;
+  opacity: 0.45;
+}
+
 .checklist-list {
   display: grid;
   gap: 0.7rem;
@@ -2442,8 +2487,13 @@ input {
 @media (max-width: 720px) {
   .checklist-hero-head,
   .checklist-input-row,
+  .checklist-tools,
   .checklist-row {
     grid-template-columns: 1fr;
+  }
+
+  .checklist-tools {
+    align-items: stretch;
   }
 
   .checklist-stats {

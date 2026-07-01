@@ -2,7 +2,7 @@ use crate::llm::secrets::load_secrets;
 use crate::settings::AppSettings;
 use anyhow::{anyhow, Context, Result};
 use serde::{Deserialize, Serialize};
-use serde_json::json;
+use serde_json::{json, Value};
 
 #[derive(Debug, Clone, Serialize)]
 pub struct LlmModelInfo {
@@ -159,7 +159,8 @@ pub async fn resolve_mlx_chat_model(settings: &AppSettings) -> Result<Option<Str
 
     if let Some(m) = available.iter().find(|m| {
         m.id.ends_with(saved)
-            || m.id.strip_prefix("mlx-community/")
+            || m.id
+                .strip_prefix("mlx-community/")
                 .is_some_and(|s| s == saved)
     }) {
         return Ok(Some(m.id.clone()));
@@ -189,15 +190,56 @@ fn format_openai_chat_error(status: reqwest::StatusCode, text: &str) -> String {
     format!("API 채팅 실패 ({status}): {text}")
 }
 
-pub async fn chat(
-    settings: &AppSettings,
-    system: &str,
-    user: &str,
-) -> Result<LlmChatResult> {
+#[derive(Deserialize)]
+#[serde(untagged)]
+enum ChatContent {
+    Text(String),
+    Parts(Vec<ChatContentPart>),
+    Value(Value),
+}
+
+#[derive(Deserialize)]
+struct ChatContentPart {
+    #[serde(default)]
+    text: Option<String>,
+    #[serde(default)]
+    content: Option<String>,
+}
+
+impl ChatContent {
+    fn into_text(self) -> String {
+        match self {
+            ChatContent::Text(text) => text,
+            ChatContent::Parts(parts) => parts
+                .into_iter()
+                .filter_map(|part| part.text.or(part.content))
+                .collect::<Vec<_>>()
+                .join("\n"),
+            ChatContent::Value(value) => match value {
+                Value::Null => String::new(),
+                Value::String(text) => text,
+                Value::Array(items) => items
+                    .into_iter()
+                    .filter_map(|item| {
+                        item.get("text")
+                            .or_else(|| item.get("content"))
+                            .and_then(Value::as_str)
+                            .map(ToString::to_string)
+                    })
+                    .collect::<Vec<_>>()
+                    .join("\n"),
+                other => other.to_string(),
+            },
+        }
+    }
+}
+
+pub async fn chat(settings: &AppSettings, system: &str, user: &str) -> Result<LlmChatResult> {
     match settings.llm_provider.as_str() {
         "mlxlm" => {
             let resolved = resolve_mlx_chat_model(settings).await?;
-            chat_openai_compatible(settings, resolved.as_deref(), system, user, false, "mlxlm").await
+            chat_openai_compatible(settings, resolved.as_deref(), system, user, false, "mlxlm")
+                .await
         }
         other => {
             let model = settings.llm_model.trim();
@@ -207,15 +249,8 @@ pub async fn chat(
             match other {
                 "ollama" => chat_ollama(settings, model, system, user).await,
                 "lmstudio" => {
-                    chat_openai_compatible(
-                        settings,
-                        Some(model),
-                        system,
-                        user,
-                        false,
-                        "lmstudio",
-                    )
-                    .await
+                    chat_openai_compatible(settings, Some(model), system, user, false, "lmstudio")
+                        .await
                 }
                 "openai" => {
                     chat_openai_compatible(settings, Some(model), system, user, true, "openai")
@@ -325,11 +360,14 @@ async fn chat_openai_compatible(
     }
     #[derive(Deserialize)]
     struct Choice {
-        message: ChatMessage,
+        #[serde(default)]
+        message: Option<ChatMessage>,
+        #[serde(default)]
+        text: Option<String>,
     }
     #[derive(Deserialize)]
     struct ChatMessage {
-        content: String,
+        content: ChatContent,
     }
 
     let parsed: ChatResponse = resp.json().await.context("API 응답 파싱 실패")?;
@@ -337,11 +375,22 @@ async fn chat_openai_compatible(
         .choices
         .into_iter()
         .next()
-        .map(|c| c.message.content)
+        .map(|c| {
+            c.message
+                .map(|message| message.content.into_text())
+                .or(c.text)
+                .unwrap_or_default()
+        })
         .unwrap_or_default();
+    let answer = answer.trim().to_string();
+    if answer.is_empty() {
+        return Err(anyhow!(
+            "API 응답은 도착했지만 답변 내용이 비어 있습니다. 모델 또는 서버 로그를 확인하세요."
+        ));
+    }
 
     Ok(LlmChatResult {
-        answer: answer.trim().to_string(),
+        answer,
         model: model.unwrap_or("default").to_string(),
         provider: provider.to_string(),
     })
@@ -361,4 +410,22 @@ pub async fn test_connection(settings: &AppSettings) -> Result<String> {
     )
     .await?;
     Ok(format!("{} ({})", result.answer, result.model))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::ChatContent;
+
+    #[test]
+    fn parses_openai_string_content() {
+        let content: ChatContent = serde_json::from_str(r#""hello""#).unwrap();
+        assert_eq!(content.into_text(), "hello");
+    }
+
+    #[test]
+    fn parses_openai_part_array_content() {
+        let content: ChatContent =
+            serde_json::from_str(r#"[{"type":"text","text":"hello"},{"text":"world"}]"#).unwrap();
+        assert_eq!(content.into_text(), "hello\nworld");
+    }
 }
