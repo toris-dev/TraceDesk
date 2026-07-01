@@ -91,10 +91,6 @@ pub struct AppSettings {
     pub devpulse_backlog_pause_sec: u32,
     #[serde(default = "default_devpulse_bundle_size")]
     pub devpulse_bundle_size: u32,
-    #[serde(default = "default_devpulse_sns_mode")]
-    pub devpulse_sns_mode: String,
-    #[serde(default)]
-    pub devpulse_mastodon_instance: String,
     #[serde(default)]
     pub checklist_items: Vec<ChecklistItem>,
 }
@@ -187,10 +183,6 @@ fn default_devpulse_bundle_size() -> u32 {
     6
 }
 
-fn default_devpulse_sns_mode() -> String {
-    "file".into()
-}
-
 pub fn normalize_theme(value: &str) -> String {
     if value == "light" {
         "light".into()
@@ -230,8 +222,6 @@ impl Default for AppSettings {
             devpulse_idle_poll_sec: default_devpulse_idle_poll_sec(),
             devpulse_backlog_pause_sec: 0,
             devpulse_bundle_size: default_devpulse_bundle_size(),
-            devpulse_sns_mode: default_devpulse_sns_mode(),
-            devpulse_mastodon_instance: String::new(),
             checklist_items: Vec::new(),
         }
     }

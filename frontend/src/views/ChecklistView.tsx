@@ -11,7 +11,7 @@ const CHECKLIST_EVENT = "checklist-updated";
 const QUICK_TASKS = [
   "Pulse 저장 경로 확인",
   "오늘 devPulse 실행 결과 확인",
-  "카드/영상/SNS 산출물 점검",
+  "카드/영상 산출물 점검",
 ];
 
 function makeItem(title: string): ChecklistItem {

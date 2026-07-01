@@ -7,7 +7,6 @@ mod collector;
 mod commands;
 mod database;
 mod devpulse;
-mod devpulse_secrets;
 mod events;
 mod export;
 mod llm;
@@ -178,9 +177,6 @@ pub fn run() {
             llm::commands::llm_chat,
             devpulse::get_devpulse_config,
             devpulse::update_devpulse_settings,
-            devpulse::get_devpulse_secrets_status,
-            devpulse::update_devpulse_secrets,
-            devpulse::update_devpulse_sns_config,
             devpulse::get_devpulse_status,
             devpulse::get_devpulse_infra_status,
             devpulse::run_devpulse_now,
@@ -188,10 +184,6 @@ pub fn run() {
             devpulse::stop_devpulse_infra,
             devpulse::start_devpulse_daemon,
             devpulse::stop_devpulse_daemon,
-            devpulse::check_devpulse_sns,
-            devpulse::run_devpulse_sns_now,
-            devpulse::start_devpulse_sns_daemon,
-            devpulse::stop_devpulse_sns_daemon,
             devpulse::pick_devpulse_root_dir,
         ])
         .build(tauri::generate_context!())

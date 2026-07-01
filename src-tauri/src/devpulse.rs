@@ -1,12 +1,10 @@
-use crate::devpulse_secrets::{load_devpulse_secrets, save_devpulse_secrets, DevPulseSecrets};
 use crate::llm::secrets::load_secrets;
 use crate::settings::{
-    default_url_for_llm_provider, save_settings, uses_api_base_url, AppSettings,
+    AppSettings, default_url_for_llm_provider, save_settings, uses_api_base_url,
 };
 use crate::settings_commands::SettingsState;
 use chrono::{Datelike, Local, Timelike};
 use reqwest::Url;
-use rusqlite::Connection;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::env;
@@ -44,15 +42,10 @@ pub struct DevPulseState(pub Arc<Mutex<DevPulseRuntime>>);
 #[derive(Default)]
 pub struct DevPulseRuntime {
     daemon: Option<Child>,
-    sns_daemon: Option<Child>,
     run_in_flight: bool,
-    sns_in_flight: bool,
     last_cron_key: Option<String>,
     last_run_at: Option<String>,
     last_error: Option<String>,
-    sns_last_check_at: Option<String>,
-    sns_last_run_at: Option<String>,
-    sns_last_error: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -71,9 +64,6 @@ pub struct DevPulseConfigView {
     pub idle_poll_sec: u32,
     pub backlog_pause_sec: u32,
     pub bundle_size: u32,
-    pub sns_mode: String,
-    pub mastodon_instance: String,
-    pub has_mastodon_token: bool,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -81,16 +71,6 @@ pub struct DevPulseRuntimeView {
     pub daemon_running: bool,
     pub daemon_pid: Option<u32>,
     pub run_in_flight: bool,
-    pub last_run_at: Option<String>,
-    pub last_error: Option<String>,
-}
-
-#[derive(Debug, Clone, Serialize)]
-pub struct DevPulseSnsRuntimeView {
-    pub daemon_running: bool,
-    pub daemon_pid: Option<u32>,
-    pub in_flight: bool,
-    pub last_check_at: Option<String>,
     pub last_run_at: Option<String>,
     pub last_error: Option<String>,
 }
@@ -123,7 +103,6 @@ pub struct DevPulseInfraStatusView {
 pub struct DevPulseStatusView {
     pub config: DevPulseConfigView,
     pub runtime: DevPulseRuntimeView,
-    pub sns_runtime: DevPulseSnsRuntimeView,
     pub dependencies: Vec<DevPulseDependencyView>,
     pub payload: Value,
 }
@@ -142,57 +121,6 @@ pub struct UpdateDevPulseSettingsArgs {
     pub idle_poll_sec: Option<u32>,
     pub backlog_pause_sec: Option<u32>,
     pub bundle_size: Option<u32>,
-    pub sns_mode: Option<String>,
-    pub mastodon_instance: Option<String>,
-}
-
-#[derive(Debug, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct UpdateDevPulseSecretsArgs {
-    pub mastodon_access_token: Option<String>,
-    pub x_api_key: Option<String>,
-    pub x_api_secret: Option<String>,
-    pub x_access_token: Option<String>,
-    pub x_access_secret: Option<String>,
-}
-
-#[derive(Debug, Clone, Serialize)]
-pub struct DevPulseSecretsStatusView {
-    pub has_mastodon_token: bool,
-    pub has_x_credentials: bool,
-}
-
-#[derive(Debug, Clone, Serialize)]
-pub struct DevPulseSnsConfigView {
-    pub app_id: String,
-    pub user_id: String,
-    pub has_access_token: bool,
-    pub post_times: Vec<String>,
-    pub reels_per_day: u32,
-    pub timezone: String,
-    pub poll_sec: u32,
-    pub graph_version: String,
-    pub media_port: u32,
-    pub media_public_base_url: String,
-    pub minio_public_endpoint: String,
-    pub dry_run: bool,
-}
-
-#[derive(Debug, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct UpdateDevPulseSnsConfigArgs {
-    pub app_id: Option<String>,
-    pub user_id: Option<String>,
-    pub access_token: Option<String>,
-    pub post_times: Option<Vec<String>>,
-    pub reels_per_day: Option<u32>,
-    pub timezone: Option<String>,
-    pub poll_sec: Option<u32>,
-    pub graph_version: Option<String>,
-    pub media_port: Option<u32>,
-    pub media_public_base_url: Option<String>,
-    pub minio_public_endpoint: Option<String>,
-    pub dry_run: Option<bool>,
 }
 
 fn fallback_root_candidates() -> Vec<PathBuf> {
@@ -277,14 +205,6 @@ fn infra_dir(root: &Path) -> PathBuf {
     root.join("infra")
 }
 
-fn instagram_env_path(root: &Path) -> PathBuf {
-    infra_dir(root).join(".env.instagram")
-}
-
-fn instagram_env_example_path(root: &Path) -> PathBuf {
-    infra_dir(root).join(".env.instagram.example")
-}
-
 fn bridge_pythonpath(app: &AppHandle) -> Option<PathBuf> {
     if let Ok(resource_dir) = app.path().resource_dir() {
         let bundled = resource_dir.join("devpulse_bridge");
@@ -314,7 +234,6 @@ fn allow_output_dir(app: &AppHandle, root: &Path) {
 }
 
 fn build_config_view(settings: &AppSettings, root: Option<&Path>) -> DevPulseConfigView {
-    let secrets = load_devpulse_secrets();
     let configured = configured_root_path(settings);
     let configured_text = settings.devpulse_root_dir.trim().to_string();
     let (root_dir, root_ready, root_exists, setup_hint) = match root {
@@ -351,9 +270,6 @@ fn build_config_view(settings: &AppSettings, root: Option<&Path>) -> DevPulseCon
         idle_poll_sec: settings.devpulse_idle_poll_sec,
         backlog_pause_sec: settings.devpulse_backlog_pause_sec,
         bundle_size: settings.devpulse_bundle_size,
-        sns_mode: settings.devpulse_sns_mode.clone(),
-        mastodon_instance: settings.devpulse_mastodon_instance.clone(),
-        has_mastodon_token: !secrets.mastodon_access_token.trim().is_empty(),
     }
 }
 
@@ -385,60 +301,28 @@ fn build_runtime_view(runtime: &mut DevPulseRuntime) -> DevPulseRuntimeView {
     }
 }
 
-fn build_sns_runtime_view(runtime: &mut DevPulseRuntime) -> DevPulseSnsRuntimeView {
-    let mut daemon_running = false;
-    let mut daemon_pid = None;
-    if let Some(child) = runtime.sns_daemon.as_mut() {
-        match child.try_wait() {
-            Ok(Some(_)) => {
-                runtime.sns_daemon = None;
-            }
-            Ok(None) => {
-                daemon_running = true;
-                daemon_pid = Some(child.id());
-            }
-            Err(e) => {
-                runtime.sns_last_error = Some(format!("sns daemon status check failed: {e}"));
-                runtime.sns_daemon = None;
-            }
-        }
-    }
-
-    DevPulseSnsRuntimeView {
-        daemon_running,
-        daemon_pid,
-        in_flight: runtime.sns_in_flight,
-        last_check_at: runtime.sns_last_check_at.clone(),
-        last_run_at: runtime.sns_last_run_at.clone(),
-        last_error: runtime.sns_last_error.clone(),
-    }
-}
-
 fn read_devpulse_env(root: &Path) -> Vec<(String, String)> {
-    [
-        root.join("infra").join(".env"),
-        root.join("infra").join(".env.instagram"),
-    ]
-    .into_iter()
-    .filter_map(|path| fs::read_to_string(path).ok())
-    .flat_map(|raw| {
-        raw.lines()
-            .map(str::trim)
-            .filter(|line| !line.is_empty() && !line.starts_with('#'))
-            .filter_map(|line| line.split_once('='))
-            .map(|(key, value)| {
-                (
-                    key.trim().to_string(),
-                    value
-                        .trim()
-                        .trim_matches('"')
-                        .trim_matches('\'')
-                        .to_string(),
-                )
-            })
-            .collect::<Vec<_>>()
-    })
-    .collect()
+    [root.join("infra").join(".env")]
+        .into_iter()
+        .filter_map(|path| fs::read_to_string(path).ok())
+        .flat_map(|raw| {
+            raw.lines()
+                .map(str::trim)
+                .filter(|line| !line.is_empty() && !line.starts_with('#'))
+                .filter_map(|line| line.split_once('='))
+                .map(|(key, value)| {
+                    (
+                        key.trim().to_string(),
+                        value
+                            .trim()
+                            .trim_matches('"')
+                            .trim_matches('\'')
+                            .to_string(),
+                    )
+                })
+                .collect::<Vec<_>>()
+        })
+        .collect()
 }
 
 fn env_lookup(entries: &[(String, String)], key: &str) -> Option<String> {
@@ -447,268 +331,6 @@ fn env_lookup(entries: &[(String, String)], key: &str) -> Option<String> {
         .rev()
         .find(|(entry_key, _)| entry_key == key)
         .map(|(_, value)| value.clone())
-}
-
-fn resolve_data_path(root: &Path, raw: &str) -> PathBuf {
-    let path = PathBuf::from(raw);
-    if path.is_absolute() {
-        path
-    } else {
-        root.join(path)
-    }
-}
-
-fn instagram_env_map(root: &Path) -> Vec<(String, String)> {
-    let path = instagram_env_path(root);
-    if let Ok(raw) = fs::read_to_string(&path) {
-        raw.lines()
-            .map(str::trim)
-            .filter(|line| !line.is_empty() && !line.starts_with('#'))
-            .filter_map(|line| line.split_once('='))
-            .map(|(key, value)| {
-                (
-                    key.trim().to_string(),
-                    value
-                        .trim()
-                        .trim_matches('"')
-                        .trim_matches('\'')
-                        .to_string(),
-                )
-            })
-            .collect()
-    } else {
-        Vec::new()
-    }
-}
-
-fn build_instagram_config_view(root: &Path) -> DevPulseSnsConfigView {
-    let env_entries = read_devpulse_env(root);
-    let post_times = env_lookup(&env_entries, "IG_POST_TIMES")
-        .map(|raw| {
-            raw.split(',')
-                .map(str::trim)
-                .filter(|item| !item.is_empty())
-                .map(ToOwned::to_owned)
-                .collect::<Vec<_>>()
-        })
-        .unwrap_or_else(|| {
-            vec![
-                "09:00".to_string(),
-                "14:00".to_string(),
-                "19:00".to_string(),
-            ]
-        });
-    DevPulseSnsConfigView {
-        app_id: env_lookup(&env_entries, "IG_APP_ID").unwrap_or_default(),
-        user_id: env_lookup(&env_entries, "IG_USER_ID").unwrap_or_default(),
-        has_access_token: env_lookup(&env_entries, "IG_ACCESS_TOKEN")
-            .map(|value| !value.trim().is_empty())
-            .unwrap_or(false),
-        post_times,
-        reels_per_day: env_lookup(&env_entries, "IG_REELS_PER_DAY")
-            .and_then(|value| value.parse::<u32>().ok())
-            .unwrap_or(1),
-        timezone: env_lookup(&env_entries, "IG_TIMEZONE")
-            .unwrap_or_else(|| "Asia/Seoul".to_string()),
-        poll_sec: env_lookup(&env_entries, "IG_POLL_SEC")
-            .and_then(|value| value.parse::<u32>().ok())
-            .unwrap_or(60),
-        graph_version: env_lookup(&env_entries, "IG_GRAPH_VERSION")
-            .unwrap_or_else(|| "v21.0".to_string()),
-        media_port: env_lookup(&env_entries, "IG_MEDIA_PORT")
-            .and_then(|value| value.parse::<u32>().ok())
-            .unwrap_or(9088),
-        media_public_base_url: env_lookup(&env_entries, "IG_MEDIA_PUBLIC_BASE_URL")
-            .unwrap_or_default(),
-        minio_public_endpoint: env_lookup(&env_entries, "MINIO_PUBLIC_ENDPOINT")
-            .unwrap_or_default(),
-        dry_run: env_lookup(&env_entries, "IG_DRY_RUN")
-            .map(|value| matches!(value.to_ascii_lowercase().as_str(), "1" | "true" | "yes"))
-            .unwrap_or(true),
-    }
-}
-
-fn write_instagram_env(root: &Path, updates: &[(String, String)]) -> Result<(), String> {
-    let path = instagram_env_path(root);
-    let example = instagram_env_example_path(root);
-    let mut contents = if path.exists() {
-        fs::read_to_string(&path).map_err(|e| format!("failed to read .env.instagram: {e}"))?
-    } else if example.exists() {
-        fs::read_to_string(&example)
-            .map_err(|e| format!("failed to read .env.instagram.example: {e}"))?
-    } else {
-        String::new()
-    };
-
-    for (key, value) in updates {
-        let replacement = format!("{key}={value}");
-        let mut replaced = false;
-        let mut next_lines = Vec::new();
-        for line in contents.lines() {
-            if line.trim_start().starts_with(&format!("{key}=")) {
-                next_lines.push(replacement.clone());
-                replaced = true;
-            } else {
-                next_lines.push(line.to_string());
-            }
-        }
-        if !replaced {
-            if !next_lines.is_empty() && !next_lines.last().is_some_and(|line| line.is_empty()) {
-                next_lines.push(String::new());
-            }
-            next_lines.push(replacement);
-        }
-        contents = next_lines.join("\n");
-        if !contents.ends_with('\n') {
-            contents.push('\n');
-        }
-    }
-
-    fs::write(path, contents).map_err(|e| format!("failed to write .env.instagram: {e}"))
-}
-
-fn instagram_state_db_path(root: &Path) -> PathBuf {
-    let env_entries = read_devpulse_env(root);
-    env_lookup(&env_entries, "IG_STATE_DB")
-        .map(|raw| resolve_data_path(root, &raw))
-        .unwrap_or_else(|| output_dir(root).join("instagram").join("state.db"))
-}
-
-fn build_instagram_status(root: &Path) -> Value {
-    let config = build_instagram_config_view(root);
-    let state_db = instagram_state_db_path(root);
-    let timezone = config.timezone.clone();
-    let post_times = config.post_times.clone();
-    let reels_per_day = config.reels_per_day;
-    let mut issues: Vec<String> = Vec::new();
-    if config.app_id.trim().is_empty() {
-        issues.push("IG_APP_ID missing".to_string());
-    } else if !config.app_id.chars().all(|c| c.is_ascii_digit()) {
-        issues.push("IG_APP_ID must be numeric".to_string());
-    }
-    if config.user_id.trim().is_empty() {
-        issues.push("IG_USER_ID missing".to_string());
-    } else if !config.user_id.chars().all(|c| c.is_ascii_digit()) {
-        issues.push("IG_USER_ID must be numeric".to_string());
-    }
-    if !config.has_access_token {
-        issues.push("IG_ACCESS_TOKEN missing".to_string());
-    }
-    if config.media_public_base_url.trim().is_empty()
-        && config.minio_public_endpoint.trim().is_empty()
-    {
-        issues.push("public media endpoint missing".to_string());
-    }
-
-    if !state_db.exists() {
-        return serde_json::json!({
-            "configured": false,
-            "config": config,
-            "state_db": state_db.display().to_string(),
-            "timezone": timezone,
-            "post_times": post_times,
-            "reels_per_day": reels_per_day,
-            "issues": issues,
-            "stats": { "total": 0, "posted": 0, "failed": 0 },
-            "daily_counts": [],
-            "recent_posts": [],
-        });
-    }
-
-    let Ok(conn) = Connection::open(&state_db) else {
-        return serde_json::json!({
-            "configured": true,
-            "config": config,
-            "state_db": state_db.display().to_string(),
-            "timezone": timezone,
-            "post_times": post_times,
-            "reels_per_day": reels_per_day,
-            "issues": issues,
-            "stats": { "total": 0, "posted": 0, "failed": 0 },
-            "daily_counts": [],
-            "recent_posts": [],
-            "error": "failed to open instagram poster state db",
-        });
-    };
-
-    let stats = conn
-        .query_row(
-            "
-            SELECT
-              COUNT(*) AS total,
-              SUM(CASE WHEN ig_media_id IS NOT NULL THEN 1 ELSE 0 END) AS posted,
-              SUM(CASE WHEN error IS NOT NULL AND error <> '' THEN 1 ELSE 0 END) AS failed
-            FROM ig_posts
-            ",
-            [],
-            |row| {
-                Ok(serde_json::json!({
-                    "total": row.get::<_, i64>(0).unwrap_or(0),
-                    "posted": row.get::<_, i64>(1).unwrap_or(0),
-                    "failed": row.get::<_, i64>(2).unwrap_or(0),
-                }))
-            },
-        )
-        .unwrap_or_else(|_| serde_json::json!({ "total": 0, "posted": 0, "failed": 0 }));
-
-    let mut daily_counts = Vec::new();
-    if let Ok(mut stmt) = conn.prepare(
-        "
-        SELECT day, kind, count
-        FROM ig_daily
-        ORDER BY day DESC, kind ASC
-        LIMIT 14
-        ",
-    ) {
-        if let Ok(rows) = stmt.query_map([], |row| {
-            Ok(serde_json::json!({
-                "day": row.get::<_, String>(0).unwrap_or_default(),
-                "kind": row.get::<_, String>(1).unwrap_or_default(),
-                "count": row.get::<_, i64>(2).unwrap_or(0),
-            }))
-        }) {
-            daily_counts = rows.flatten().collect::<Vec<_>>();
-        }
-    }
-
-    let mut recent_posts = Vec::new();
-    if let Ok(mut stmt) = conn.prepare(
-        "
-        SELECT bundle_id, kind, ig_media_id, posted_at, error, content_key
-        FROM ig_posts
-        ORDER BY
-          CASE WHEN posted_at IS NULL OR posted_at = '' THEN 1 ELSE 0 END,
-          posted_at DESC,
-          bundle_id DESC
-        LIMIT 20
-        ",
-    ) {
-        if let Ok(rows) = stmt.query_map([], |row| {
-            Ok(serde_json::json!({
-                "bundle_id": row.get::<_, String>(0).unwrap_or_default(),
-                "kind": row.get::<_, String>(1).unwrap_or_default(),
-                "ig_media_id": row.get::<_, Option<String>>(2).unwrap_or(None),
-                "posted_at": row.get::<_, Option<String>>(3).unwrap_or(None),
-                "error": row.get::<_, Option<String>>(4).unwrap_or(None),
-                "content_key": row.get::<_, Option<String>>(5).unwrap_or(None),
-            }))
-        }) {
-            recent_posts = rows.flatten().collect::<Vec<_>>();
-        }
-    }
-
-    serde_json::json!({
-        "configured": true,
-        "config": config,
-        "state_db": state_db.display().to_string(),
-        "timezone": timezone,
-        "post_times": post_times,
-        "reels_per_day": reels_per_day,
-        "issues": issues,
-        "stats": stats,
-        "daily_counts": daily_counts,
-        "recent_posts": recent_posts,
-    })
 }
 
 fn probe_socket(host: &str, port: u16) -> Result<(), String> {
@@ -1055,11 +677,6 @@ fn configure_env(cmd: &mut Command, settings: &AppSettings, bridge_dir: Option<&
             },
         )
         .env("LLM_MODEL", settings.llm_model.trim())
-        .env("SNS_MODE", settings.devpulse_sns_mode.trim())
-        .env(
-            "MASTODON_INSTANCE",
-            settings.devpulse_mastodon_instance.trim(),
-        )
         .env("FEEDS", settings.devpulse_feeds.join(" "))
         .env(
             "DEVPULSE_TOPIC_FILTERS",
@@ -1091,60 +708,6 @@ fn configure_env(cmd: &mut Command, settings: &AppSettings, bridge_dir: Option<&
 
     if !secrets.api_key.trim().is_empty() {
         cmd.env("OPENAI_API_KEY", secrets.api_key.trim());
-    }
-
-    let devpulse_secrets = load_devpulse_secrets();
-    if !devpulse_secrets.mastodon_access_token.trim().is_empty() {
-        cmd.env(
-            "MASTODON_ACCESS_TOKEN",
-            devpulse_secrets.mastodon_access_token.trim(),
-        );
-    }
-    if !devpulse_secrets.x_api_key.trim().is_empty() {
-        cmd.env("X_API_KEY", devpulse_secrets.x_api_key.trim());
-    }
-    if !devpulse_secrets.x_api_secret.trim().is_empty() {
-        cmd.env("X_API_SECRET", devpulse_secrets.x_api_secret.trim());
-    }
-    if !devpulse_secrets.x_access_token.trim().is_empty() {
-        cmd.env("X_ACCESS_TOKEN", devpulse_secrets.x_access_token.trim());
-    }
-    if !devpulse_secrets.x_access_secret.trim().is_empty() {
-        cmd.env("X_ACCESS_SECRET", devpulse_secrets.x_access_secret.trim());
-    }
-}
-
-fn instagram_poster_dir(root: &Path) -> PathBuf {
-    root.join("services").join("instagram-poster")
-}
-
-fn run_instagram_poster(root: &Path, args: &[&str]) -> Result<String, String> {
-    let python = python_bin(root);
-    let poster_dir = instagram_poster_dir(root);
-    let output = Command::new(python)
-        .current_dir(&poster_dir)
-        .arg("main.py")
-        .args(args)
-        .env("PYTHONUNBUFFERED", "1")
-        .stdout(Stdio::piped())
-        .stderr(Stdio::piped())
-        .output()
-        .map_err(|e| format!("failed to run instagram poster: {e}"))?;
-
-    let stdout = String::from_utf8_lossy(&output.stdout).trim().to_string();
-    let stderr = String::from_utf8_lossy(&output.stderr).trim().to_string();
-    if output.status.success() {
-        if stdout.is_empty() {
-            Ok("ok".to_string())
-        } else {
-            Ok(stdout)
-        }
-    } else if !stderr.is_empty() {
-        Err(stderr)
-    } else if !stdout.is_empty() {
-        Err(stdout)
-    } else {
-        Err("instagram poster command failed".to_string())
     }
 }
 
@@ -1534,161 +1097,9 @@ pub fn update_devpulse_settings(
     if let Some(size) = args.bundle_size {
         settings.devpulse_bundle_size = size.clamp(1, 24);
     }
-    if let Some(mode) = args.sns_mode {
-        settings.devpulse_sns_mode = match mode.trim().to_ascii_lowercase().as_str() {
-            "mastodon" => "mastodon".into(),
-            "x" => "x".into(),
-            _ => "file".into(),
-        };
-    }
-    if let Some(instance) = args.mastodon_instance {
-        settings.devpulse_mastodon_instance = instance.trim().to_string();
-    }
-
     save_settings(&settings).map_err(|e| e.to_string())?;
     let root = try_resolve_root(&settings);
     Ok(build_config_view(&settings, root.as_deref()))
-}
-
-#[tauri::command]
-pub fn get_devpulse_secrets_status() -> DevPulseSecretsStatusView {
-    DevPulseSecretsStatusView {
-        has_mastodon_token: has_mastodon_token(),
-        has_x_credentials: has_x_credentials(),
-    }
-}
-
-#[tauri::command]
-pub fn update_devpulse_secrets(
-    args: UpdateDevPulseSecretsArgs,
-) -> Result<DevPulseSecretsStatusView, String> {
-    let existing = load_devpulse_secrets();
-    save_devpulse_secrets(&DevPulseSecrets {
-        mastodon_access_token: args
-            .mastodon_access_token
-            .unwrap_or(existing.mastodon_access_token),
-        x_api_key: args.x_api_key.unwrap_or(existing.x_api_key),
-        x_api_secret: args.x_api_secret.unwrap_or(existing.x_api_secret),
-        x_access_token: args.x_access_token.unwrap_or(existing.x_access_token),
-        x_access_secret: args.x_access_secret.unwrap_or(existing.x_access_secret),
-    })
-    .map_err(|e| e.to_string())?;
-    Ok(DevPulseSecretsStatusView {
-        has_mastodon_token: has_mastodon_token(),
-        has_x_credentials: has_x_credentials(),
-    })
-}
-
-#[tauri::command]
-pub fn update_devpulse_sns_config(
-    settings_state: State<SettingsState>,
-    args: UpdateDevPulseSnsConfigArgs,
-) -> Result<DevPulseSnsConfigView, String> {
-    let settings = settings_state.0.read().map_err(|e| e.to_string())?.clone();
-    let root = resolve_root(&settings)?;
-    let current = build_instagram_config_view(&root);
-    let updates = vec![
-        (
-            "IG_APP_ID".to_string(),
-            args.app_id.unwrap_or(current.app_id),
-        ),
-        (
-            "IG_USER_ID".to_string(),
-            args.user_id.unwrap_or(current.user_id),
-        ),
-        (
-            "IG_ACCESS_TOKEN".to_string(),
-            args.access_token
-                .map(|value| value.trim().to_string())
-                .filter(|value| !value.is_empty())
-                .unwrap_or_else(|| {
-                    if current.has_access_token {
-                        instagram_env_map(&root)
-                            .into_iter()
-                            .find(|(key, _)| key == "IG_ACCESS_TOKEN")
-                            .map(|(_, value)| value)
-                            .unwrap_or_default()
-                    } else {
-                        String::new()
-                    }
-                }),
-        ),
-        (
-            "IG_POST_TIMES".to_string(),
-            args.post_times
-                .unwrap_or(current.post_times)
-                .into_iter()
-                .map(|item| item.trim().to_string())
-                .filter(|item| !item.is_empty())
-                .collect::<Vec<_>>()
-                .join(","),
-        ),
-        (
-            "IG_REELS_PER_DAY".to_string(),
-            args.reels_per_day
-                .unwrap_or(current.reels_per_day)
-                .clamp(1, 24)
-                .to_string(),
-        ),
-        (
-            "IG_TIMEZONE".to_string(),
-            args.timezone.unwrap_or(current.timezone),
-        ),
-        (
-            "IG_POLL_SEC".to_string(),
-            args.poll_sec
-                .unwrap_or(current.poll_sec)
-                .clamp(10, 3600)
-                .to_string(),
-        ),
-        (
-            "IG_GRAPH_VERSION".to_string(),
-            args.graph_version.unwrap_or(current.graph_version),
-        ),
-        (
-            "IG_MEDIA_PORT".to_string(),
-            args.media_port
-                .unwrap_or(current.media_port)
-                .clamp(1, 65535)
-                .to_string(),
-        ),
-        (
-            "IG_MEDIA_PUBLIC_BASE_URL".to_string(),
-            args.media_public_base_url
-                .unwrap_or(current.media_public_base_url),
-        ),
-        (
-            "MINIO_PUBLIC_ENDPOINT".to_string(),
-            args.minio_public_endpoint
-                .unwrap_or(current.minio_public_endpoint),
-        ),
-        (
-            "IG_DRY_RUN".to_string(),
-            if args.dry_run.unwrap_or(current.dry_run) {
-                "1"
-            } else {
-                "0"
-            }
-            .to_string(),
-        ),
-    ];
-    write_instagram_env(&root, &updates)?;
-    Ok(build_instagram_config_view(&root))
-}
-
-fn has_mastodon_token() -> bool {
-    !load_devpulse_secrets()
-        .mastodon_access_token
-        .trim()
-        .is_empty()
-}
-
-fn has_x_credentials() -> bool {
-    let secrets = load_devpulse_secrets();
-    !secrets.x_api_key.trim().is_empty()
-        && !secrets.x_api_secret.trim().is_empty()
-        && !secrets.x_access_token.trim().is_empty()
-        && !secrets.x_access_secret.trim().is_empty()
 }
 
 #[tauri::command]
@@ -1705,7 +1116,6 @@ pub fn get_devpulse_status(
         return Ok(DevPulseStatusView {
             config: build_config_view(&settings, None),
             runtime: build_runtime_view(&mut runtime),
-            sns_runtime: build_sns_runtime_view(&mut runtime),
             dependencies: Vec::new(),
             payload: empty_dashboard_payload(),
         });
@@ -1723,15 +1133,9 @@ pub fn get_devpulse_status(
             empty_dashboard_payload()
         }
     };
-    let mut payload = payload;
-    if let Value::Object(map) = &mut payload {
-        map.insert("sns".to_string(), build_instagram_status(&root));
-    }
-
     Ok(DevPulseStatusView {
         config: build_config_view(&settings, Some(&root)),
         runtime: build_runtime_view(&mut runtime),
-        sns_runtime: build_sns_runtime_view(&mut runtime),
         dependencies,
         payload,
     })
@@ -1895,108 +1299,6 @@ pub fn stop_devpulse_daemon(
         let _ = child.wait();
     }
     Ok(build_runtime_view(&mut runtime))
-}
-
-#[tauri::command]
-pub async fn check_devpulse_sns(
-    settings_state: State<'_, SettingsState>,
-    runtime_state: State<'_, DevPulseState>,
-) -> Result<String, String> {
-    {
-        let mut runtime = runtime_state.0.lock().map_err(|e| e.to_string())?;
-        if runtime.sns_in_flight {
-            return Err("SNS poster job already running".to_string());
-        }
-        runtime.sns_in_flight = true;
-    }
-
-    let settings = settings_state.0.read().map_err(|e| e.to_string())?.clone();
-    let root = resolve_root(&settings)?;
-    let result =
-        tauri::async_runtime::spawn_blocking(move || run_instagram_poster(&root, &["--check"]))
-            .await
-            .map_err(|e| e.to_string())?;
-
-    let mut runtime = runtime_state.0.lock().map_err(|e| e.to_string())?;
-    runtime.sns_in_flight = false;
-    runtime.sns_last_check_at = Some(Local::now().to_rfc3339());
-    if let Err(error) = &result {
-        runtime.sns_last_error = Some(error.clone());
-    } else {
-        runtime.sns_last_error = None;
-    }
-    result
-}
-
-#[tauri::command]
-pub async fn run_devpulse_sns_now(
-    settings_state: State<'_, SettingsState>,
-    runtime_state: State<'_, DevPulseState>,
-) -> Result<String, String> {
-    {
-        let mut runtime = runtime_state.0.lock().map_err(|e| e.to_string())?;
-        if runtime.sns_in_flight {
-            return Err("SNS poster job already running".to_string());
-        }
-        runtime.sns_in_flight = true;
-    }
-
-    let settings = settings_state.0.read().map_err(|e| e.to_string())?.clone();
-    let root = resolve_root(&settings)?;
-    let result =
-        tauri::async_runtime::spawn_blocking(move || run_instagram_poster(&root, &["--once"]))
-            .await
-            .map_err(|e| e.to_string())?;
-
-    let mut runtime = runtime_state.0.lock().map_err(|e| e.to_string())?;
-    runtime.sns_in_flight = false;
-    runtime.sns_last_run_at = Some(Local::now().to_rfc3339());
-    if let Err(error) = &result {
-        runtime.sns_last_error = Some(error.clone());
-    } else {
-        runtime.sns_last_error = None;
-    }
-    result
-}
-
-#[tauri::command]
-pub fn start_devpulse_sns_daemon(
-    settings_state: State<SettingsState>,
-    runtime_state: State<DevPulseState>,
-) -> Result<DevPulseSnsRuntimeView, String> {
-    let settings = settings_state.0.read().map_err(|e| e.to_string())?.clone();
-    let root = resolve_root(&settings)?;
-    let python = python_bin(&root);
-    let poster_dir = instagram_poster_dir(&root);
-
-    let mut runtime = runtime_state.0.lock().map_err(|e| e.to_string())?;
-    if runtime.sns_daemon.is_some() {
-        return Ok(build_sns_runtime_view(&mut runtime));
-    }
-
-    let child = Command::new(python)
-        .current_dir(&poster_dir)
-        .arg("main.py")
-        .env("PYTHONUNBUFFERED", "1")
-        .stdout(Stdio::null())
-        .stderr(Stdio::null())
-        .spawn()
-        .map_err(|e| format!("failed to start SNS poster daemon: {e}"))?;
-    runtime.sns_daemon = Some(child);
-    runtime.sns_last_error = None;
-    Ok(build_sns_runtime_view(&mut runtime))
-}
-
-#[tauri::command]
-pub fn stop_devpulse_sns_daemon(
-    runtime_state: State<DevPulseState>,
-) -> Result<DevPulseSnsRuntimeView, String> {
-    let mut runtime = runtime_state.0.lock().map_err(|e| e.to_string())?;
-    if let Some(mut child) = runtime.sns_daemon.take() {
-        let _ = child.kill();
-        let _ = child.wait();
-    }
-    Ok(build_sns_runtime_view(&mut runtime))
 }
 
 pub fn default_devpulse_feeds() -> Vec<String> {

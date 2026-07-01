@@ -1,25 +1,17 @@
 import { useEffect, useMemo, useState } from "react";
 import {
-  checkDevPulseSns,
   getDevPulseInfraStatus,
-  getDevPulseSecretsStatus,
   getDevPulseStatus,
   pickDevPulseRootDir,
   runDevPulseNow,
-  runDevPulseSnsNow,
   startDevPulseDaemon,
-  startDevPulseSnsDaemon,
   stopDevPulseDaemon,
-  stopDevPulseSnsDaemon,
   showChecklistWindow,
   toAssetUrl,
-  updateDevPulseSecrets,
-  updateDevPulseSnsConfig,
   updateDevPulseSettings,
   type DevPulseBundleArtifact,
   type DevPulseDbBundle,
   type DevPulseInfraStatusView,
-  type DevPulseSecretsStatusView,
   type DevPulseStatusView,
 } from "../api/client";
 import { useI18n } from "../i18n";
@@ -73,39 +65,12 @@ export function DevPulseView() {
   const [idlePollSec, setIdlePollSec] = useState(90);
   const [backlogPauseSec, setBacklogPauseSec] = useState(0);
   const [bundleSize, setBundleSize] = useState(6);
-  const [snsMode, setSnsMode] = useState("file");
-  const [mastodonInstance, setMastodonInstance] = useState("");
-  const [mastodonToken, setMastodonToken] = useState("");
-  const [xApiKey, setXApiKey] = useState("");
-  const [xApiSecret, setXApiSecret] = useState("");
-  const [xAccessToken, setXAccessToken] = useState("");
-  const [xAccessSecret, setXAccessSecret] = useState("");
-  const [igAppId, setIgAppId] = useState("");
-  const [igUserId, setIgUserId] = useState("");
-  const [igAccessToken, setIgAccessToken] = useState("");
-  const [igPostTimes, setIgPostTimes] = useState("09:00, 14:00, 19:00");
-  const [igReelsPerDay, setIgReelsPerDay] = useState(3);
-  const [igTimezone, setIgTimezone] = useState("Asia/Seoul");
-  const [igPollSec, setIgPollSec] = useState(60);
-  const [igGraphVersion, setIgGraphVersion] = useState("v21.0");
-  const [igMediaPort, setIgMediaPort] = useState(9088);
-  const [igMediaPublicBaseUrl, setIgMediaPublicBaseUrl] = useState("");
-  const [igMinioPublicEndpoint, setIgMinioPublicEndpoint] = useState("");
-  const [igDryRun, setIgDryRun] = useState(true);
-  const [secretStatus, setSecretStatus] = useState<DevPulseSecretsStatusView | null>(null);
   const [infraStatus, setInfraStatus] = useState<DevPulseInfraStatusView | null>(null);
   const [pickingRoot, setPickingRoot] = useState(false);
 
   async function load() {
     setLoading(true);
     const errors: string[] = [];
-
-    try {
-      const secrets = await getDevPulseSecretsStatus();
-      setSecretStatus(secrets);
-    } catch (e) {
-      errors.push(formatError(e));
-    }
 
     try {
       const infra = await getDevPulseInfraStatus();
@@ -128,22 +93,6 @@ export function DevPulseView() {
       setIdlePollSec(next.config.idle_poll_sec);
       setBacklogPauseSec(next.config.backlog_pause_sec);
       setBundleSize(next.config.bundle_size);
-      setSnsMode(next.config.sns_mode);
-      setMastodonInstance(next.config.mastodon_instance);
-      const snsConfig = next.payload.sns?.config;
-      if (snsConfig) {
-        setIgAppId(snsConfig.app_id);
-        setIgUserId(snsConfig.user_id);
-        setIgPostTimes(snsConfig.post_times.join(", "));
-        setIgReelsPerDay(snsConfig.reels_per_day);
-        setIgTimezone(snsConfig.timezone);
-        setIgPollSec(snsConfig.poll_sec);
-        setIgGraphVersion(snsConfig.graph_version);
-        setIgMediaPort(snsConfig.media_port);
-        setIgMediaPublicBaseUrl(snsConfig.media_public_base_url);
-        setIgMinioPublicEndpoint(snsConfig.minio_public_endpoint);
-        setIgDryRun(snsConfig.dry_run);
-      }
     } catch (e) {
       errors.push(formatError(e));
     }
@@ -201,30 +150,10 @@ export function DevPulseView() {
         idlePollSec,
         backlogPauseSec,
         bundleSize,
-        snsMode,
-        mastodonInstance,
       });
       setRootDir(config.root_dir);
       setDockerCliPath(config.docker_cli_path);
       setStatus((current) => (current ? { ...current, config } : current));
-      if (mastodonToken.trim()) {
-        const nextSecrets = await updateDevPulseSecrets({ mastodonAccessToken: mastodonToken.trim() });
-        setSecretStatus(nextSecrets);
-        setMastodonToken("");
-      }
-      if (snsMode === "x" && (xApiKey.trim() || xApiSecret.trim() || xAccessToken.trim() || xAccessSecret.trim())) {
-        const nextSecrets = await updateDevPulseSecrets({
-          xApiKey: xApiKey.trim(),
-          xApiSecret: xApiSecret.trim(),
-          xAccessToken: xAccessToken.trim(),
-          xAccessSecret: xAccessSecret.trim(),
-        });
-        setSecretStatus(nextSecrets);
-        setXApiKey("");
-        setXApiSecret("");
-        setXAccessToken("");
-        setXAccessSecret("");
-      }
       void load();
     } catch (e) {
       setError(formatError(e));
@@ -261,63 +190,9 @@ export function DevPulseView() {
     }
   }
 
-  async function controlSns(action: "check" | "run" | "start-daemon" | "stop-daemon") {
-    setRunning(action);
-    try {
-      if (action === "check") {
-        await checkDevPulseSns();
-      } else if (action === "run") {
-        await runDevPulseSnsNow();
-      } else if (action === "start-daemon") {
-        await startDevPulseSnsDaemon();
-      } else {
-        await stopDevPulseSnsDaemon();
-      }
-      await load();
-    } catch (e) {
-      setError(formatError(e));
-    } finally {
-      setRunning(null);
-    }
-  }
-
-  async function saveSnsConfig() {
-    setSaving(true);
-    try {
-      await updateDevPulseSnsConfig({
-        appId: igAppId,
-        userId: igUserId,
-        accessToken: igAccessToken.trim() || undefined,
-        postTimes: igPostTimes
-          .split(",")
-          .map((value) => value.trim())
-          .filter(Boolean),
-        reelsPerDay: igReelsPerDay,
-        timezone: igTimezone,
-        pollSec: igPollSec,
-        graphVersion: igGraphVersion,
-        mediaPort: igMediaPort,
-        mediaPublicBaseUrl: igMediaPublicBaseUrl,
-        minioPublicEndpoint: igMinioPublicEndpoint,
-        dryRun: igDryRun,
-      });
-      setIgAccessToken("");
-      await load();
-    } catch (e) {
-      setError(formatError(e));
-    } finally {
-      setSaving(false);
-    }
-  }
-
   const cards = status?.payload.artifacts?.cards ?? [];
   const bundles = status?.payload.artifacts?.bundles ?? [];
   const dbBundles = status?.payload.db?.recent_bundles ?? [];
-  const snsPosts = status?.payload.sns?.recent_posts ?? [];
-  const snsStats = status?.payload.sns?.stats;
-  const snsRuntime = status?.sns_runtime;
-  const snsIssues = status?.payload.sns?.issues ?? [];
-  const snsConfig = status?.payload.sns?.config;
   const slots = status?.payload.bundle?.slots ?? [];
   const progress = status?.payload.progress;
   const db = status?.payload.db;
@@ -337,7 +212,6 @@ export function DevPulseView() {
   const dbError =
     typeof status?.payload.db?.counts?.error === "string" ? status.payload.db.counts.error : null;
   const runtimeError = status?.runtime.last_error ?? null;
-  const snsRuntimeError = status?.sns_runtime.last_error ?? null;
   const rootReady = status?.config.root_ready ?? false;
   const setupHint = status?.config.setup_hint || status?.runtime.last_error || t("pulse.setupSaveHint");
   const dockerReady = Boolean(infraStatus?.docker_available && infraStatus?.docker_daemon_ready);
@@ -345,8 +219,6 @@ export function DevPulseView() {
   const crawlCount = progress?.total_collected ?? db?.counts?.collected ?? 0;
   const cardCount = counts?.cards ?? db?.counts?.card_generated ?? 0;
   const videoCount = counts?.bundles ?? db?.bundle_total ?? 0;
-  const snsCount = progress?.total_published ?? db?.counts?.published ?? 0;
-  const bundleById = new Map(bundles.map((bundle) => [bundle.bundle_id, bundle]));
 
   return (
     <div className="space-y-6 max-w-[1480px]">
@@ -396,13 +268,6 @@ export function DevPulseView() {
                 className="rounded-full border border-border px-3 py-1 text-[11px] font-data text-text-muted hover:border-[var(--cyber-cyan)] hover:text-[var(--cyber-cyan)]"
               >
                 {t("pulse.openBundles")}
-              </button>
-              <button
-                type="button"
-                onClick={() => jumpToSection("pulse-uploads")}
-                className="rounded-full border border-border px-3 py-1 text-[11px] font-data text-text-muted hover:border-[var(--cyber-cyan)] hover:text-[var(--cyber-cyan)]"
-              >
-                {t("pulse.openUploads")}
               </button>
             </div>
             <div className="flex flex-wrap items-center gap-2 pt-1">
@@ -458,7 +323,7 @@ export function DevPulseView() {
           </div>
         </div>
 
-        <div className="mt-5 grid gap-3 md:grid-cols-4">
+        <div className="mt-5 grid gap-3 md:grid-cols-3">
           <div className="rounded-xl border border-border/70 bg-surface/70 p-4">
             <p className="text-[11px] font-data text-text-muted">{t("pulse.daemonStatus")}</p>
             <strong className="mt-2 block text-lg text-text">
@@ -475,15 +340,9 @@ export function DevPulseView() {
               {db?.bundle_pending ?? "-"}
             </strong>
           </div>
-          <div className="rounded-xl border border-border/70 bg-surface/70 p-4">
-            <p className="text-[11px] font-data text-text-muted">{t("pulse.snsPublished")}</p>
-            <strong className="mt-2 block text-lg text-text">
-              {progress?.total_published ?? 0}
-            </strong>
-          </div>
         </div>
 
-        <div className="mt-3 grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+        <div className="mt-3 grid gap-3 md:grid-cols-3">
           <QuickPulseMetric
             label={t("pulse.crawlCount")}
             value={String(crawlCount)}
@@ -498,11 +357,6 @@ export function DevPulseView() {
             label={t("pulse.videoCount")}
             value={String(videoCount)}
             tone="violet"
-          />
-          <QuickPulseMetric
-            label={t("pulse.snsCount")}
-            value={String(snsCount)}
-            tone="amber"
           />
         </div>
 
@@ -570,8 +424,8 @@ export function DevPulseView() {
           </div>
         )}
 
-        {(dbError || runtimeError || snsRuntimeError) && (
-          <div className="mt-4 grid gap-3 xl:grid-cols-3">
+        {(dbError || runtimeError) && (
+          <div className="mt-4 grid gap-3 xl:grid-cols-2">
             {dbError && (
               <StatusAlert
                 title={t("pulse.dbWarningTitle")}
@@ -584,13 +438,6 @@ export function DevPulseView() {
                 title={t("pulse.pipelineWarningTitle")}
                 message={runtimeError}
                 tone="danger"
-              />
-            )}
-            {snsRuntimeError && (
-              <StatusAlert
-                title={t("pulse.snsWarningTitle")}
-                message={snsRuntimeError}
-                tone="amber"
               />
             )}
           </div>
@@ -769,18 +616,6 @@ export function DevPulseView() {
                 className="w-full rounded-lg border border-border bg-surface px-3 py-2 text-sm"
               />
             </label>
-            <label className="space-y-1 text-sm">
-              <span className="text-text-muted">{t("pulse.snsMode")}</span>
-              <select
-                value={snsMode}
-                onChange={(e) => setSnsMode(e.target.value)}
-                className="w-full rounded-lg border border-border bg-surface px-3 py-2 text-sm"
-              >
-                <option value="file">file</option>
-                <option value="mastodon">mastodon</option>
-                <option value="x">x</option>
-              </select>
-            </label>
           </div>
 
           <label className="space-y-1 text-sm block max-w-xs">
@@ -793,83 +628,6 @@ export function DevPulseView() {
               className="w-full rounded-lg border border-border bg-surface px-3 py-2 text-sm"
             />
           </label>
-
-          <div className="grid gap-4 md:grid-cols-2">
-            {snsMode === "mastodon" && (
-              <>
-                <label className="space-y-1 text-sm">
-                  <span className="text-text-muted">{t("pulse.mastodonInstance")}</span>
-                  <input
-                    value={mastodonInstance}
-                    onChange={(e) => setMastodonInstance(e.target.value)}
-                    className="w-full rounded-lg border border-border bg-surface px-3 py-2 text-sm"
-                    placeholder="https://mastodon.social"
-                  />
-                </label>
-                <label className="space-y-1 text-sm">
-                  <span className="text-text-muted">{t("pulse.mastodonToken")}</span>
-                  <input
-                    type="password"
-                    value={mastodonToken}
-                    onChange={(e) => setMastodonToken(e.target.value)}
-                    className="w-full rounded-lg border border-border bg-surface px-3 py-2 text-sm"
-                    placeholder={secretStatus?.has_mastodon_token ? t("pulse.secretSaved") : ""}
-                  />
-                </label>
-              </>
-            )}
-            {snsMode === "x" && (
-              <>
-                <label className="space-y-1 text-sm">
-                  <span className="text-text-muted">X_API_KEY</span>
-                  <input
-                    value={xApiKey}
-                    onChange={(e) => setXApiKey(e.target.value)}
-                    className="w-full rounded-lg border border-border bg-surface px-3 py-2 text-sm"
-                    placeholder={secretStatus?.has_x_credentials ? t("pulse.secretSaved") : ""}
-                  />
-                </label>
-                <label className="space-y-1 text-sm">
-                  <span className="text-text-muted">X_API_SECRET</span>
-                  <input
-                    type="password"
-                    value={xApiSecret}
-                    onChange={(e) => setXApiSecret(e.target.value)}
-                    className="w-full rounded-lg border border-border bg-surface px-3 py-2 text-sm"
-                    placeholder={secretStatus?.has_x_credentials ? t("pulse.secretSaved") : ""}
-                  />
-                </label>
-                <label className="space-y-1 text-sm">
-                  <span className="text-text-muted">X_ACCESS_TOKEN</span>
-                  <input
-                    value={xAccessToken}
-                    onChange={(e) => setXAccessToken(e.target.value)}
-                    className="w-full rounded-lg border border-border bg-surface px-3 py-2 text-sm"
-                    placeholder={secretStatus?.has_x_credentials ? t("pulse.secretSaved") : ""}
-                  />
-                </label>
-                <label className="space-y-1 text-sm">
-                  <span className="text-text-muted">X_ACCESS_SECRET</span>
-                  <input
-                    type="password"
-                    value={xAccessSecret}
-                    onChange={(e) => setXAccessSecret(e.target.value)}
-                    className="w-full rounded-lg border border-border bg-surface px-3 py-2 text-sm"
-                    placeholder={secretStatus?.has_x_credentials ? t("pulse.secretSaved") : ""}
-                  />
-                </label>
-              </>
-            )}
-          </div>
-          <p className="text-xs text-text-muted">
-            {snsMode === "x"
-              ? secretStatus?.has_x_credentials
-                ? t("pulse.secretSaved")
-                : t("pulse.secretMissing")
-              : secretStatus?.has_mastodon_token
-                ? t("pulse.secretSaved")
-                : t("pulse.secretMissing")}
-          </p>
 
           <div className="flex flex-wrap gap-2">
             <button
@@ -920,200 +678,7 @@ export function DevPulseView() {
         </div>
       </section>
 
-      <section id="pulse-uploads" className="grid gap-6 xl:grid-cols-3 scroll-mt-24">
-        <div className="td-panel p-6">
-          <div className="flex items-center justify-between gap-3">
-            <div>
-              <h3 className="text-lg font-display text-[var(--cyber-cyan)]">{t("pulse.snsDeliveryTitle")}</h3>
-              <p className="text-sm text-text-muted">{t("pulse.snsDeliveryDesc")}</p>
-            </div>
-            <strong className="text-sm text-text-muted">{snsStats?.posted ?? 0}</strong>
-          </div>
-          <div className="mt-4 flex flex-wrap gap-2">
-            <button
-              type="button"
-              onClick={() => void controlSns("check")}
-              disabled={running !== null || !rootReady}
-              className="rounded-lg border border-border px-3 py-2 text-sm text-text-muted hover:border-[var(--cyber-cyan)] disabled:opacity-50"
-            >
-              {t("pulse.snsCheck")}
-            </button>
-            <button
-              type="button"
-              onClick={() => void controlSns("run")}
-              disabled={running !== null || !rootReady}
-              className="rounded-lg border border-border px-3 py-2 text-sm text-text-muted hover:border-[var(--cyber-cyan)] disabled:opacity-50"
-            >
-              {t("pulse.snsRunNow")}
-            </button>
-            <button
-              type="button"
-              onClick={() => void controlSns(snsRuntime?.daemon_running ? "stop-daemon" : "start-daemon")}
-              disabled={running !== null || !rootReady}
-              className="rounded-lg border border-accent/40 px-3 py-2 text-sm text-accent hover:bg-accent/10 disabled:opacity-50"
-            >
-              {snsRuntime?.daemon_running ? t("pulse.snsStopDaemon") : t("pulse.snsStartDaemon")}
-            </button>
-          </div>
-          <div className="mt-4 grid gap-3 md:grid-cols-3">
-            <StatCell label={t("pulse.snsDaemonStatus")} value={snsRuntime?.daemon_running ? t("pulse.running") : t("pulse.idle")} />
-            <StatCell label={t("pulse.snsLastCheck")} value={fmt(snsRuntime?.last_check_at)} />
-            <StatCell label={t("pulse.snsLastRun")} value={fmt(snsRuntime?.last_run_at)} />
-          </div>
-          {snsRuntime?.last_error && (
-            <div className="mt-3 rounded-lg border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-xs text-amber-200">
-              {snsRuntime.last_error}
-            </div>
-          )}
-          <div className="mt-4 grid gap-3 md:grid-cols-2">
-            <label className="space-y-1 text-sm">
-              <span className="text-text-muted">IG_APP_ID</span>
-              <input
-                value={igAppId}
-                onChange={(e) => setIgAppId(e.target.value)}
-                className="w-full rounded-lg border border-border bg-surface px-3 py-2 text-sm"
-              />
-            </label>
-            <label className="space-y-1 text-sm">
-              <span className="text-text-muted">IG_USER_ID</span>
-              <input
-                value={igUserId}
-                onChange={(e) => setIgUserId(e.target.value)}
-                className="w-full rounded-lg border border-border bg-surface px-3 py-2 text-sm"
-              />
-            </label>
-            <label className="space-y-1 text-sm md:col-span-2">
-              <span className="text-text-muted">IG_ACCESS_TOKEN</span>
-              <input
-                type="password"
-                value={igAccessToken}
-                onChange={(e) => setIgAccessToken(e.target.value)}
-                placeholder={snsConfig?.has_access_token ? t("pulse.secretSaved") : ""}
-                className="w-full rounded-lg border border-border bg-surface px-3 py-2 text-sm"
-              />
-            </label>
-            <label className="space-y-1 text-sm">
-              <span className="text-text-muted">IG_POST_TIMES</span>
-              <input
-                value={igPostTimes}
-                onChange={(e) => setIgPostTimes(e.target.value)}
-                className="w-full rounded-lg border border-border bg-surface px-3 py-2 text-sm"
-              />
-            </label>
-            <label className="space-y-1 text-sm">
-              <span className="text-text-muted">IG_REELS_PER_DAY</span>
-              <input
-                type="number"
-                min={1}
-                max={24}
-                value={igReelsPerDay}
-                onChange={(e) => setIgReelsPerDay(Number(e.target.value) || 1)}
-                className="w-full rounded-lg border border-border bg-surface px-3 py-2 text-sm"
-              />
-            </label>
-            <label className="space-y-1 text-sm">
-              <span className="text-text-muted">IG_TIMEZONE</span>
-              <input
-                value={igTimezone}
-                onChange={(e) => setIgTimezone(e.target.value)}
-                className="w-full rounded-lg border border-border bg-surface px-3 py-2 text-sm"
-              />
-            </label>
-            <label className="space-y-1 text-sm">
-              <span className="text-text-muted">IG_POLL_SEC</span>
-              <input
-                type="number"
-                min={10}
-                max={3600}
-                value={igPollSec}
-                onChange={(e) => setIgPollSec(Number(e.target.value) || 10)}
-                className="w-full rounded-lg border border-border bg-surface px-3 py-2 text-sm"
-              />
-            </label>
-            <label className="space-y-1 text-sm">
-              <span className="text-text-muted">IG_GRAPH_VERSION</span>
-              <input
-                value={igGraphVersion}
-                onChange={(e) => setIgGraphVersion(e.target.value)}
-                className="w-full rounded-lg border border-border bg-surface px-3 py-2 text-sm"
-              />
-            </label>
-            <label className="space-y-1 text-sm">
-              <span className="text-text-muted">IG_MEDIA_PORT</span>
-              <input
-                type="number"
-                min={1}
-                max={65535}
-                value={igMediaPort}
-                onChange={(e) => setIgMediaPort(Number(e.target.value) || 1)}
-                className="w-full rounded-lg border border-border bg-surface px-3 py-2 text-sm"
-              />
-            </label>
-            <label className="space-y-1 text-sm md:col-span-2">
-              <span className="text-text-muted">IG_MEDIA_PUBLIC_BASE_URL</span>
-              <input
-                value={igMediaPublicBaseUrl}
-                onChange={(e) => setIgMediaPublicBaseUrl(e.target.value)}
-                className="w-full rounded-lg border border-border bg-surface px-3 py-2 text-sm"
-              />
-            </label>
-            <label className="space-y-1 text-sm md:col-span-2">
-              <span className="text-text-muted">MINIO_PUBLIC_ENDPOINT</span>
-              <input
-                value={igMinioPublicEndpoint}
-                onChange={(e) => setIgMinioPublicEndpoint(e.target.value)}
-                className="w-full rounded-lg border border-border bg-surface px-3 py-2 text-sm"
-              />
-            </label>
-            <label className="flex items-center gap-2 rounded-lg border border-border/70 bg-surface/60 px-3 py-2 text-sm">
-              <input type="checkbox" checked={igDryRun} onChange={(e) => setIgDryRun(e.target.checked)} />
-              <span>IG_DRY_RUN</span>
-            </label>
-          </div>
-          <div className="mt-3 flex items-center justify-between gap-3">
-            <p className="text-xs text-text-muted">{snsConfig?.has_access_token ? t("pulse.secretSaved") : t("pulse.secretMissing")}</p>
-            <button
-              type="button"
-              onClick={() => void saveSnsConfig()}
-              disabled={saving || !rootReady}
-              className="rounded-lg bg-accent px-3 py-2 text-sm text-accent-foreground disabled:opacity-50"
-            >
-              {saving ? t("common.saving") : t("pulse.save")}
-            </button>
-          </div>
-          {snsIssues.length > 0 && (
-            <div className="mt-3 rounded-lg border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-xs text-amber-200">
-              {snsIssues.join(" · ")}
-            </div>
-          )}
-          <div className="mt-4 flex flex-wrap gap-2">
-            <span className="rounded-full border border-emerald-500/30 bg-emerald-500/10 px-3 py-1 text-[11px] font-data text-emerald-300">
-              {t("pulse.snsPosted")} {snsStats?.posted ?? 0}
-            </span>
-            <span className="rounded-full border border-amber-500/30 bg-amber-500/10 px-3 py-1 text-[11px] font-data text-amber-300">
-              {t("pulse.snsFailed")} {snsStats?.failed ?? 0}
-            </span>
-            <span className="rounded-full border border-border/70 bg-surface px-3 py-1 text-[11px] font-data text-text-muted">
-              {t("pulse.snsQueue")} {snsStats?.total ?? 0}
-            </span>
-          </div>
-          <div className="mt-4 space-y-3">
-            {snsPosts.length === 0 && (
-              <p className="text-sm text-text-muted">
-                {status?.payload.sns?.configured ? t("pulse.snsDeliveryEmpty") : t("pulse.snsDeliverySetup")}
-              </p>
-            )}
-            {snsPosts.slice(0, 6).map((post) => (
-              <SnsDeliveryRow
-                key={`${post.bundle_id}-${post.kind}`}
-                post={post}
-                bundle={bundleById.get(post.bundle_id)}
-                t={t}
-              />
-            ))}
-          </div>
-        </div>
-
+      <section className="grid gap-6 xl:grid-cols-2">
         <div className="td-panel p-6">
           <div className="flex items-center justify-between gap-3">
             <div>
@@ -1125,7 +690,7 @@ export function DevPulseView() {
           <div className="mt-4 space-y-3">
             {bundles.length === 0 && <p className="text-sm text-text-muted">{t("pulse.bundleEmpty")}</p>}
             {bundles.slice(0, 5).map((bundle) => (
-              <BundleUploadRow key={bundle.bundle_id} bundle={bundle} t={t} />
+              <BundleSummaryRow key={bundle.bundle_id} bundle={bundle} t={t} />
             ))}
           </div>
         </div>
@@ -1304,7 +869,7 @@ function StatusAlert({
   );
 }
 
-function BundleUploadRow({
+function BundleSummaryRow({
   bundle,
   t,
 }: {
@@ -1329,87 +894,6 @@ function BundleUploadRow({
         </div>
       </div>
       {bundle.caption && <p className="mt-3 line-clamp-3 whitespace-pre-wrap text-sm text-text-muted">{bundle.caption}</p>}
-    </article>
-  );
-}
-
-function SnsDeliveryRow({
-  post,
-  bundle,
-  t,
-}: {
-  post: {
-    bundle_id: string;
-    kind: string;
-    ig_media_id?: string | null;
-    posted_at?: string | null;
-    error?: string | null;
-  };
-  bundle?: DevPulseBundleArtifact;
-  t: (key: string) => string;
-}) {
-  const state = post.ig_media_id ? "posted" : post.error ? "failed" : "pending";
-  const badgeClass =
-    state === "posted"
-      ? "border-emerald-500/30 bg-emerald-500/10 text-emerald-300"
-      : state === "failed"
-        ? "border-amber-500/30 bg-amber-500/10 text-amber-300"
-        : "border-border/70 bg-surface text-text-muted";
-
-  return (
-    <article className="rounded-xl border border-border/70 bg-surface/60 p-4">
-      <div className="flex flex-wrap items-start justify-between gap-3">
-        <div className="min-w-0">
-          <h4 className="truncate font-display text-base text-text">{post.bundle_id}</h4>
-          <p className="mt-1 text-sm text-text-muted">
-            {post.kind} · {fmt(post.posted_at)}
-          </p>
-          <p className="mt-1 text-xs text-text-muted">
-            {post.ig_media_id ? `IG ${post.ig_media_id}` : post.error || t("pulse.snsPending")}
-          </p>
-        </div>
-        <div className={`rounded-full border px-2.5 py-1 text-[11px] font-data ${badgeClass}`}>
-          {state === "posted"
-            ? t("pulse.snsPosted")
-            : state === "failed"
-              ? t("pulse.snsFailed")
-              : t("pulse.snsPending")}
-        </div>
-      </div>
-      {bundle && (
-        <div className="mt-3 flex flex-wrap gap-2 text-xs">
-          {bundle.video_url && (
-            <a
-              className="rounded-lg border border-border px-2 py-1 text-text-muted hover:border-[var(--cyber-cyan)]"
-              href={toAssetUrl(bundle.video_url) ?? undefined}
-              target="_blank"
-              rel="noreferrer"
-            >
-              {t("pulse.openVideo")}
-            </a>
-          )}
-          {bundle.json_url && (
-            <a
-              className="rounded-lg border border-border px-2 py-1 text-text-muted hover:border-[var(--cyber-cyan)]"
-              href={toAssetUrl(bundle.json_url) ?? undefined}
-              target="_blank"
-              rel="noreferrer"
-            >
-              {t("pulse.openJson")}
-            </a>
-          )}
-          {bundle.caption_url && (
-            <a
-              className="rounded-lg border border-border px-2 py-1 text-text-muted hover:border-[var(--cyber-cyan)]"
-              href={toAssetUrl(bundle.caption_url) ?? undefined}
-              target="_blank"
-              rel="noreferrer"
-            >
-              {t("pulse.openCaption")}
-            </a>
-          )}
-        </div>
-      )}
     </article>
   );
 }

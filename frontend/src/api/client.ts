@@ -223,8 +223,6 @@ function previewSettings(): AppSettings {
     devpulse_idle_poll_sec: 90,
     devpulse_backlog_pause_sec: 0,
     devpulse_bundle_size: 6,
-    devpulse_sns_mode: "file",
-    devpulse_mastodon_instance: "",
   };
 }
 
@@ -455,9 +453,6 @@ async function mockInvoke<T>(cmd: string, args?: Record<string, unknown>): Promi
       idle_poll_sec: 90,
       backlog_pause_sec: 0,
       bundle_size: 6,
-      sns_mode: "file",
-      mastodon_instance: "",
-      has_mastodon_token: false,
     } satisfies DevPulseConfigView,
     get_devpulse_status: {
       config: {
@@ -475,23 +470,12 @@ async function mockInvoke<T>(cmd: string, args?: Record<string, unknown>): Promi
         idle_poll_sec: 90,
         backlog_pause_sec: 0,
         bundle_size: 6,
-        sns_mode: "file",
-        mastodon_instance: "",
-        has_mastodon_token: false,
       },
       runtime: {
         daemon_running: false,
         daemon_pid: null,
         run_in_flight: false,
         last_run_at: "2026-06-19T21:50:00+09:00",
-        last_error: null,
-      },
-      sns_runtime: {
-        daemon_running: false,
-        daemon_pid: null,
-        in_flight: false,
-        last_check_at: "2026-06-19T20:40:00+09:00",
-        last_run_at: "2026-06-19T21:12:00+09:00",
         last_error: null,
       },
       dependencies: [
@@ -543,14 +527,13 @@ async function mockInvoke<T>(cmd: string, args?: Record<string, unknown>): Promi
           queue_size: 0,
           processed_this_run: 0,
           failed_this_run: 0,
-          total_published: 18,
           total_collected: 3,
           total_failed: 1,
           updated_at: "2026-06-19T21:50:00+09:00",
           recent_logs: ["cycle #12 idle processed=0", "dashboard: http://127.0.0.1:8188"],
         },
         db: {
-          counts: { published: 18, card_generated: 4, collected: 3, failed: 1 },
+          counts: { card_generated: 4, collected: 3, failed: 1 },
           bundle_pending: "4/6",
           bundle_total: 3,
           recent_bundles: [],
@@ -592,7 +575,7 @@ async function mockInvoke<T>(cmd: string, args?: Record<string, unknown>): Promi
               created_at: "2026-06-19T21:10:00+09:00",
               caption: "AI infra weekly digest",
               caption_url: null,
-              json_url: "/Users/toris/projects/devPulse/output/sns/bundle-20260619-01.json",
+              json_url: "/Users/toris/projects/devPulse/output/bundles/bundle-20260619-01/bundle-20260619-01.json",
               video_url: "/Users/toris/projects/devPulse/output/bundles/bundle-20260619-01/bundle-20260619-01.mp4",
               card_count: 6,
               size_kb: 1822.2,
@@ -602,55 +585,6 @@ async function mockInvoke<T>(cmd: string, args?: Record<string, unknown>): Promi
         logs: {
           tail: ["[21:49] idle", "[21:50] waiting next cycle"],
           log_file: "output/daemon.log",
-        },
-        sns: {
-          configured: true,
-          config: {
-            app_id: "123456789012345",
-            user_id: "17841400000000000",
-            has_access_token: true,
-            post_times: ["09:00", "14:00", "19:00"],
-            reels_per_day: 3,
-            timezone: "Asia/Seoul",
-            poll_sec: 60,
-            graph_version: "v21.0",
-            media_port: 9088,
-            media_public_base_url: "",
-            minio_public_endpoint: "https://minio.example.com",
-            dry_run: true,
-          },
-          state_db: "/Users/toris/projects/devPulse/output/instagram/state.db",
-          timezone: "Asia/Seoul",
-          post_times: ["09:00", "14:00", "19:00"],
-          reels_per_day: 3,
-          issues: [],
-          stats: {
-            total: 4,
-            posted: 3,
-            failed: 1,
-          },
-          daily_counts: [
-            { day: "2026-06-19", kind: "reel", count: 2 },
-            { day: "2026-06-18", kind: "reel", count: 1 },
-          ],
-          recent_posts: [
-            {
-              bundle_id: "bundle-20260619-01",
-              kind: "reel",
-              ig_media_id: "17890000000000001",
-              posted_at: "2026-06-19T21:12:00+09:00",
-              error: null,
-              content_key: "posts:post-1,post-2,post-3,post-4,post-5,post-6",
-            },
-            {
-              bundle_id: "bundle-20260618-02",
-              kind: "reel",
-              ig_media_id: null,
-              posted_at: null,
-              error: "media processing failed",
-              content_key: "posts:post-7,post-8,post-9,post-10,post-11,post-12",
-            },
-          ],
         },
         generated_at: "2026-06-19T21:50:00+09:00",
       },
@@ -695,30 +629,6 @@ async function mockInvoke<T>(cmd: string, args?: Record<string, unknown>): Promi
   }
   if (cmd === "save_checklist_items") return (args?.items ?? []) as T;
   if (cmd === "show_checklist_window" || cmd === "hide_checklist_window") return undefined as T;
-  if (cmd === "get_devpulse_secrets_status" || cmd === "update_devpulse_secrets") {
-    return {
-      has_mastodon_token: Boolean(args?.mastodonAccessToken) || cmd === "get_devpulse_secrets_status",
-      has_x_credentials:
-        (Boolean(args?.xApiKey) && Boolean(args?.xApiSecret) && Boolean(args?.xAccessToken) && Boolean(args?.xAccessSecret))
-        || cmd === "get_devpulse_secrets_status",
-    } as T;
-  }
-  if (cmd === "update_devpulse_sns_config") {
-    return {
-      app_id: String(args?.appId ?? "123456789012345"),
-      user_id: String(args?.userId ?? "17841400000000000"),
-      has_access_token: args?.accessToken ? String(args.accessToken).trim().length > 0 : true,
-      post_times: Array.isArray(args?.postTimes) ? (args.postTimes as string[]) : ["09:00", "14:00", "19:00"],
-      reels_per_day: Number(args?.reelsPerDay ?? 3),
-      timezone: String(args?.timezone ?? "Asia/Seoul"),
-      poll_sec: Number(args?.pollSec ?? 60),
-      graph_version: String(args?.graphVersion ?? "v21.0"),
-      media_port: Number(args?.mediaPort ?? 9088),
-      media_public_base_url: String(args?.mediaPublicBaseUrl ?? ""),
-      minio_public_endpoint: String(args?.minioPublicEndpoint ?? "https://minio.example.com"),
-      dry_run: Boolean(args?.dryRun ?? true),
-    } as T;
-  }
   if (cmd === "get_devpulse_infra_status" || cmd === "start_devpulse_infra" || cmd === "stop_devpulse_infra") {
     return responses.get_devpulse_infra_status as T;
   }
@@ -729,19 +639,6 @@ async function mockInvoke<T>(cmd: string, args?: Record<string, unknown>): Promi
       daemon_pid: cmd === "start_devpulse_daemon" ? 4242 : null,
       run_in_flight: false,
       last_run_at: "2026-06-19T21:50:00+09:00",
-      last_error: null,
-    } as T;
-  }
-  if (cmd === "check_devpulse_sns" || cmd === "run_devpulse_sns_now") {
-    return "ok" as T;
-  }
-  if (cmd === "start_devpulse_sns_daemon" || cmd === "stop_devpulse_sns_daemon") {
-    return {
-      daemon_running: cmd === "start_devpulse_sns_daemon",
-      daemon_pid: cmd === "start_devpulse_sns_daemon" ? 4343 : null,
-      in_flight: false,
-      last_check_at: "2026-06-19T20:40:00+09:00",
-      last_run_at: "2026-06-19T21:12:00+09:00",
       last_error: null,
     } as T;
   }
@@ -976,8 +873,6 @@ export interface AppSettings {
   devpulse_idle_poll_sec: number;
   devpulse_backlog_pause_sec: number;
   devpulse_bundle_size: number;
-  devpulse_sns_mode: string;
-  devpulse_mastodon_instance: string;
 }
 
 export interface ArchiveInfo {
@@ -1076,29 +971,12 @@ export interface DevPulseConfigView {
   idle_poll_sec: number;
   backlog_pause_sec: number;
   bundle_size: number;
-  sns_mode: string;
-  mastodon_instance: string;
-  has_mastodon_token: boolean;
-}
-
-export interface DevPulseSecretsStatusView {
-  has_mastodon_token: boolean;
-  has_x_credentials: boolean;
 }
 
 export interface DevPulseRuntimeView {
   daemon_running: boolean;
   daemon_pid: number | null;
   run_in_flight: boolean;
-  last_run_at: string | null;
-  last_error: string | null;
-}
-
-export interface DevPulseSnsRuntimeView {
-  daemon_running: boolean;
-  daemon_pid: number | null;
-  in_flight: boolean;
-  last_check_at: string | null;
   last_run_at: string | null;
   last_error: string | null;
 }
@@ -1157,40 +1035,9 @@ export interface DevPulseDbBundle {
   created_at: string;
 }
 
-export interface DevPulseSnsDailyCount {
-  day: string;
-  kind: string;
-  count: number;
-}
-
-export interface DevPulseSnsPostRecord {
-  bundle_id: string;
-  kind: string;
-  ig_media_id?: string | null;
-  posted_at?: string | null;
-  error?: string | null;
-  content_key?: string | null;
-}
-
-export interface DevPulseSnsConfigView {
-  app_id: string;
-  user_id: string;
-  has_access_token: boolean;
-  post_times: string[];
-  reels_per_day: number;
-  timezone: string;
-  poll_sec: number;
-  graph_version: string;
-  media_port: number;
-  media_public_base_url: string;
-  minio_public_endpoint: string;
-  dry_run: boolean;
-}
-
 export interface DevPulseStatusView {
   config: DevPulseConfigView;
   runtime: DevPulseRuntimeView;
-  sns_runtime: DevPulseSnsRuntimeView;
   dependencies: DevPulseDependencyView[];
   payload: {
     progress?: {
@@ -1204,7 +1051,6 @@ export interface DevPulseStatusView {
       queue_size?: number;
       processed_this_run?: number;
       failed_this_run?: number;
-      total_published?: number;
       total_collected?: number;
       total_failed?: number;
       updated_at?: string;
@@ -1243,23 +1089,6 @@ export interface DevPulseStatusView {
       tail?: string[];
       log_file?: string;
     };
-    sns?: {
-      configured?: boolean;
-      config?: DevPulseSnsConfigView;
-      state_db?: string;
-      timezone?: string;
-      post_times?: string[];
-      reels_per_day?: number;
-      issues?: string[];
-      stats?: {
-        total?: number;
-        posted?: number;
-        failed?: number;
-      };
-      daily_counts?: DevPulseSnsDailyCount[];
-      recent_posts?: DevPulseSnsPostRecord[];
-      error?: string;
-    };
     generated_at?: string;
   };
 }
@@ -1280,8 +1109,6 @@ export function updateDevPulseSettings(opts: {
   idlePollSec?: number;
   backlogPauseSec?: number;
   bundleSize?: number;
-  snsMode?: string;
-  mastodonInstance?: string;
 }) {
   return invokeCmd<DevPulseConfigView>("update_devpulse_settings", {
     rootDir: opts.rootDir ?? null,
@@ -1295,13 +1122,7 @@ export function updateDevPulseSettings(opts: {
     idlePollSec: opts.idlePollSec ?? null,
     backlogPauseSec: opts.backlogPauseSec ?? null,
     bundleSize: opts.bundleSize ?? null,
-    snsMode: opts.snsMode ?? null,
-    mastodonInstance: opts.mastodonInstance ?? null,
   });
-}
-
-export function getDevPulseSecretsStatus() {
-  return invokeCmd<DevPulseSecretsStatusView>("get_devpulse_secrets_status");
 }
 
 export interface ChecklistItem {
@@ -1325,52 +1146,6 @@ export function showChecklistWindow() {
 
 export function hideChecklistWindow() {
   return invokeCmd<void>("hide_checklist_window");
-}
-
-export function updateDevPulseSecrets(opts: {
-  mastodonAccessToken?: string | null;
-  xApiKey?: string | null;
-  xApiSecret?: string | null;
-  xAccessToken?: string | null;
-  xAccessSecret?: string | null;
-}) {
-  return invokeCmd<DevPulseSecretsStatusView>("update_devpulse_secrets", {
-    mastodonAccessToken: opts.mastodonAccessToken ?? null,
-    xApiKey: opts.xApiKey ?? null,
-    xApiSecret: opts.xApiSecret ?? null,
-    xAccessToken: opts.xAccessToken ?? null,
-    xAccessSecret: opts.xAccessSecret ?? null,
-  });
-}
-
-export function updateDevPulseSnsConfig(opts: {
-  appId?: string;
-  userId?: string;
-  accessToken?: string;
-  postTimes?: string[];
-  reelsPerDay?: number;
-  timezone?: string;
-  pollSec?: number;
-  graphVersion?: string;
-  mediaPort?: number;
-  mediaPublicBaseUrl?: string;
-  minioPublicEndpoint?: string;
-  dryRun?: boolean;
-}) {
-  return invokeCmd<DevPulseSnsConfigView>("update_devpulse_sns_config", {
-    appId: opts.appId ?? null,
-    userId: opts.userId ?? null,
-    accessToken: opts.accessToken ?? null,
-    postTimes: opts.postTimes ?? null,
-    reelsPerDay: opts.reelsPerDay ?? null,
-    timezone: opts.timezone ?? null,
-    pollSec: opts.pollSec ?? null,
-    graphVersion: opts.graphVersion ?? null,
-    mediaPort: opts.mediaPort ?? null,
-    mediaPublicBaseUrl: opts.mediaPublicBaseUrl ?? null,
-    minioPublicEndpoint: opts.minioPublicEndpoint ?? null,
-    dryRun: opts.dryRun ?? null,
-  });
 }
 
 export function pickDevPulseRootDir() {
@@ -1403,22 +1178,6 @@ export function startDevPulseDaemon() {
 
 export function stopDevPulseDaemon() {
   return invokeCmd<DevPulseRuntimeView>("stop_devpulse_daemon");
-}
-
-export function checkDevPulseSns() {
-  return invokeCmd<string>("check_devpulse_sns");
-}
-
-export function runDevPulseSnsNow() {
-  return invokeCmd<string>("run_devpulse_sns_now");
-}
-
-export function startDevPulseSnsDaemon() {
-  return invokeCmd<DevPulseSnsRuntimeView>("start_devpulse_sns_daemon");
-}
-
-export function stopDevPulseSnsDaemon() {
-  return invokeCmd<DevPulseSnsRuntimeView>("stop_devpulse_sns_daemon");
 }
 
 export function toAssetUrl(path: string | null | undefined) {
