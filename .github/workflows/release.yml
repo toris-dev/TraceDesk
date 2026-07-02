@@ -55,15 +55,15 @@ jobs:
           releaseBody: |
             ## ${{ github.ref_name }}
 
-            ### LLM
-            - macOS 로컬/OpenAI 호환 LLM에서 응답 본문이 배열 형태로 내려오는 경우도 안정적으로 처리
-            - 비어 있는 LLM 응답은 파싱 실패 대신 원인 확인이 쉬운 메시지로 안내
-            - 문자열/배열형 LLM 응답 파서 테스트 추가
+            ### Window Controls
+            - 우측 상단 최소화/최대화/닫기 버튼을 Rust/Tauri command 경로로 안정화
+            - 닫기 동작은 트레이로 숨김 처리하고 인터랙션 피드백을 개선
 
-            ### Checklist
-            - `- [x]` 형식으로 붙여넣은 체크리스트 항목을 완료 상태로 등록
-            - 완료 항목 숨기기와 완료 정리 기능 추가
-            - 체크리스트 도구 영역의 반응형 UI 정리
+            ### Checklist Popup
+            - Windows에서 체크리스트 팝업이 빈 화면으로 열릴 수 있던 라우팅을 `?mode=checklist` 방식으로 수정
+            - macOS 체크리스트 팝업에 독립 스크롤을 적용해 긴 목록 확인 가능
+            - 체크리스트 팝업 고정/고정 해제 기능 추가 및 설정 저장
+            - 기존 팝업이 열려 있는 상태에서도 고정 상태가 즉시 반영되도록 개선
 
             ### 설치
             - macOS (Apple Silicon): `TraceDesk_*_aarch64.dmg` — Applications로 드래그

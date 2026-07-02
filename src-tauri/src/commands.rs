@@ -13,7 +13,7 @@ use crate::state::AppState;
 use crate::system::{collect_snapshot, create_monitor, SystemSnapshot};
 use chrono::{Local, NaiveDate};
 use serde::Serialize;
-use tauri::{Manager, State};
+use tauri::{AppHandle, Manager, State, WebviewWindow};
 
 #[derive(Debug, Serialize)]
 pub struct HourlyActivityItem {
@@ -386,6 +386,58 @@ pub fn get_system_snapshot(state: State<AppState>) -> Result<SystemSnapshot, Str
 pub fn kill_port_process(pid: u32) -> Result<(), String> {
     let self_pid = std::process::id();
     crate::system::kill_listener_process(pid, self_pid).map_err(|e| e.to_string())
+}
+
+#[derive(Debug, Serialize)]
+pub struct MainWindowState {
+    pub is_maximized: bool,
+    pub is_visible: bool,
+}
+
+fn main_window(app: &AppHandle) -> Result<WebviewWindow, String> {
+    app.get_webview_window("main")
+        .ok_or_else(|| "main window is not available".to_string())
+}
+
+fn main_window_state(window: &WebviewWindow) -> MainWindowState {
+    MainWindowState {
+        is_maximized: window.is_maximized().unwrap_or(false),
+        is_visible: window.is_visible().unwrap_or(true),
+    }
+}
+
+#[tauri::command]
+pub fn get_main_window_state(app: AppHandle) -> Result<MainWindowState, String> {
+    let window = main_window(&app)?;
+    Ok(main_window_state(&window))
+}
+
+#[tauri::command]
+pub fn minimize_main_window(app: AppHandle) -> Result<MainWindowState, String> {
+    let window = main_window(&app)?;
+    window.minimize().map_err(|e| e.to_string())?;
+    Ok(main_window_state(&window))
+}
+
+#[tauri::command]
+pub fn toggle_main_window_maximized(app: AppHandle) -> Result<MainWindowState, String> {
+    let window = main_window(&app)?;
+    if window.is_maximized().unwrap_or(false) {
+        window.unmaximize().map_err(|e| e.to_string())?;
+    } else {
+        window.maximize().map_err(|e| e.to_string())?;
+    }
+    Ok(main_window_state(&window))
+}
+
+#[tauri::command]
+pub fn hide_main_window(app: AppHandle) -> Result<MainWindowState, String> {
+    let window = main_window(&app)?;
+    window.hide().map_err(|e| e.to_string())?;
+    Ok(MainWindowState {
+        is_maximized: window.is_maximized().unwrap_or(false),
+        is_visible: false,
+    })
 }
 
 #[derive(Debug, Serialize)]

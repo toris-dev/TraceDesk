@@ -1,8 +1,11 @@
 import { listen } from "@tauri-apps/api/event";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import {
+  getChecklistWindowState,
   getChecklistItems,
+  hideChecklistWindow,
   saveChecklistItems,
+  setChecklistWindowPinned,
   showChecklistWindow,
   type ChecklistItem,
 } from "../api/client";
@@ -54,6 +57,8 @@ export function ChecklistView({ popup = false }: { popup?: boolean }) {
   const [items, setItems] = useState<ChecklistItem[]>([]);
   const [draft, setDraft] = useState("");
   const [hideDone, setHideDone] = useState(false);
+  const [pinned, setPinned] = useState(true);
+  const [pinSaving, setPinSaving] = useState(false);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -74,6 +79,13 @@ export function ChecklistView({ popup = false }: { popup?: boolean }) {
   useEffect(() => {
     void load();
   }, [load]);
+
+  useEffect(() => {
+    if (!popup) return;
+    getChecklistWindowState()
+      .then((state) => setPinned(state.pinned))
+      .catch(() => {});
+  }, [popup]);
 
   useEffect(() => {
     let unlisten: (() => void) | undefined;
@@ -120,6 +132,20 @@ export function ChecklistView({ popup = false }: { popup?: boolean }) {
     await commit(items.filter((item) => !item.done));
   }, [commit, completed, items]);
 
+  const togglePinned = useCallback(async () => {
+    if (pinSaving) return;
+    setPinSaving(true);
+    try {
+      const next = await setChecklistWindowPinned(!pinned);
+      setPinned(next.pinned);
+      setError(null);
+    } catch (e) {
+      setError(typeof e === "string" ? e : String(e));
+    } finally {
+      setPinSaving(false);
+    }
+  }, [pinSaving, pinned]);
+
   return (
     <div className={popup ? "checklist-popup-shell" : "checklist-page"}>
       <section className={`td-panel ${popup ? "checklist-popup-panel" : "checklist-hero"}`}>
@@ -141,6 +167,26 @@ export function ChecklistView({ popup = false }: { popup?: boolean }) {
             >
               팝업 고정 열기
             </button>
+          )}
+          {popup && (
+            <div className="checklist-popup-actions">
+              <button
+                type="button"
+                onClick={() => void togglePinned()}
+                className={`checklist-pin-toggle ${pinned ? "is-pinned" : ""}`}
+                disabled={pinSaving}
+                aria-pressed={pinned}
+              >
+                {pinned ? "고정 해제" : "고정하기"}
+              </button>
+              <button
+                type="button"
+                onClick={() => void hideChecklistWindow()}
+                className="checklist-popup-close"
+              >
+                닫기
+              </button>
+            </div>
           )}
         </div>
 

@@ -179,6 +179,16 @@ export interface SystemSnapshot {
   port_count: number;
 }
 
+export interface MainWindowState {
+  is_maximized: boolean;
+  is_visible: boolean;
+}
+
+export interface ChecklistWindowState {
+  pinned: boolean;
+  visible: boolean;
+}
+
 async function invokeCmd<T>(cmd: string, args?: Record<string, unknown>): Promise<T> {
   if (shouldUsePreviewMock()) {
     return mockInvoke<T>(cmd, args);
@@ -206,6 +216,7 @@ function previewSettings(): AppSettings {
     locale: "ko",
     theme: "dark",
     performance_mode: false,
+    checklist_pinned: true,
     setup_completed: true,
     first_run_completed: true,
     llm_provider: "ollama",
@@ -427,6 +438,15 @@ async function mockInvoke<T>(cmd: string, args?: Record<string, unknown>): Promi
       total_archive_mb: 0,
       last_archive_at: null,
     } satisfies DbStats,
+    get_main_window_state: { is_maximized: false, is_visible: true } satisfies MainWindowState,
+    minimize_main_window: { is_maximized: false, is_visible: true } satisfies MainWindowState,
+    toggle_main_window_maximized: { is_maximized: true, is_visible: true } satisfies MainWindowState,
+    hide_main_window: { is_maximized: false, is_visible: false } satisfies MainWindowState,
+    get_checklist_window_state: { pinned: true, visible: true } satisfies ChecklistWindowState,
+    set_checklist_window_pinned: {
+      pinned: Boolean(args?.pinned),
+      visible: true,
+    } satisfies ChecklistWindowState,
   };
 
   if (cmd === "update_settings") return { ...previewSettings(), ...definedSettings(args) } as T;
@@ -641,6 +661,22 @@ export function getSystemSnapshot() {
   return invokeCmd<SystemSnapshot>("get_system_snapshot");
 }
 
+export function getMainWindowState() {
+  return invokeCmd<MainWindowState>("get_main_window_state");
+}
+
+export function minimizeMainWindow() {
+  return invokeCmd<MainWindowState>("minimize_main_window");
+}
+
+export function toggleMainWindowMaximized() {
+  return invokeCmd<MainWindowState>("toggle_main_window_maximized");
+}
+
+export function hideMainWindow() {
+  return invokeCmd<MainWindowState>("hide_main_window");
+}
+
 export function killPortProcess(pid: number) {
   return invokeCmd<void>("kill_port_process", { pid });
 }
@@ -656,6 +692,7 @@ export interface AppSettings {
   locale: string;
   theme: string;
   performance_mode: boolean;
+  checklist_pinned: boolean;
   setup_completed: boolean;
   first_run_completed: boolean;
   llm_provider: string;
@@ -766,6 +803,14 @@ export function showChecklistWindow() {
 
 export function hideChecklistWindow() {
   return invokeCmd<void>("hide_checklist_window");
+}
+
+export function getChecklistWindowState() {
+  return invokeCmd<ChecklistWindowState>("get_checklist_window_state");
+}
+
+export function setChecklistWindowPinned(pinned: boolean) {
+  return invokeCmd<ChecklistWindowState>("set_checklist_window_pinned", { pinned });
 }
 
 export interface AvailableDate {

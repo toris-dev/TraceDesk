@@ -51,6 +51,9 @@ pub struct AppSettings {
     /// Reduce live polling and hide heavy realtime visuals.
     #[serde(default)]
     pub performance_mode: bool,
+    /// Keep checklist popup above other windows.
+    #[serde(default = "default_checklist_pinned")]
+    pub checklist_pinned: bool,
     /// 초기 설정 마법사 완료 여부
     #[serde(default)]
     pub setup_completed: bool,
@@ -140,6 +143,10 @@ fn default_theme() -> String {
     "dark".into()
 }
 
+fn default_checklist_pinned() -> bool {
+    true
+}
+
 pub fn normalize_theme(value: &str) -> String {
     if value == "light" {
         "light".into()
@@ -161,6 +168,7 @@ impl Default for AppSettings {
             locale: default_locale(),
             theme: default_theme(),
             performance_mode: false,
+            checklist_pinned: default_checklist_pinned(),
             setup_completed: false,
             first_run_completed: false,
             llm_provider: default_llm_provider(),

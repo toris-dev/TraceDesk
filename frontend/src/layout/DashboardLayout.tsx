@@ -1,5 +1,10 @@
-import { type ReactNode, useEffect, useState } from "react";
-import { getCurrentWindow } from "@tauri-apps/api/window";
+import { type ReactNode, useCallback, useEffect, useState } from "react";
+import {
+  getMainWindowState,
+  hideMainWindow,
+  minimizeMainWindow,
+  toggleMainWindowMaximized,
+} from "../api/client";
 import { AppLogo } from "../components/AppLogo";
 import { MASCOT_ICON_SRC } from "../components/mascot";
 import { useI18n } from "../i18n";
@@ -60,48 +65,45 @@ export function DashboardLayout({
   const { t } = useI18n();
   const current = SIDEBAR_NAV_ITEMS.find((n) => n.id === page);
   const [isMaximized, setIsMaximized] = useState(false);
+  const [windowAction, setWindowAction] = useState<"minimize" | "maximize" | "close" | null>(null);
 
   useEffect(() => {
-    const appWindow = getCurrentWindow();
-    let unlisten: (() => void) | undefined;
-
-    appWindow
-      .isMaximized()
-      .then(setIsMaximized)
+    getMainWindowState()
+      .then((state) => setIsMaximized(state.is_maximized))
       .catch(() => {});
-    appWindow
-      .onResized(() => {
-        void appWindow.isMaximized().then(setIsMaximized).catch(() => {});
-      })
-      .then((fn) => {
-        unlisten = fn;
-      })
-      .catch(() => {});
-
-    return () => {
-      unlisten?.();
-    };
   }, []);
 
-  const minimizeWindow = () => {
-    void getCurrentWindow().minimize().catch(() => {});
-  };
+  const runWindowAction = useCallback(
+    async (action: "minimize" | "maximize" | "close") => {
+      if (windowAction) return;
+      setWindowAction(action);
+      try {
+        const state =
+          action === "minimize"
+            ? await minimizeMainWindow()
+            : action === "maximize"
+              ? await toggleMainWindowMaximized()
+              : await hideMainWindow();
+        setIsMaximized(state.is_maximized);
+      } catch (error) {
+        console.warn("Window action failed", error);
+      } finally {
+        setWindowAction(null);
+      }
+    },
+    [windowAction],
+  );
 
-  const toggleMaximizeWindow = () => {
-    const appWindow = getCurrentWindow();
-    void appWindow
-      .toggleMaximize()
-      .then(() => appWindow.isMaximized())
-      .then(setIsMaximized)
-      .catch(() => {});
+  const minimizeWindow = () => {
+    void runWindowAction("minimize");
   };
 
   const closeWindow = () => {
-    void getCurrentWindow().close().catch(() => {});
+    void runWindowAction("close");
   };
 
   return (
-    <div className="h-screen flex overflow-hidden cyber-shell">
+    <div className={`h-screen flex overflow-hidden cyber-shell ${windowAction === "close" ? "is-window-closing" : ""}`}>
       <CyberSidebar
         page={page}
         onPageChange={onPageChange}
@@ -119,13 +121,32 @@ export function DashboardLayout({
               <span className="cyber-window-mode" data-tauri-drag-region>LOCAL ACTIVITY OS</span>
             </div>
             <div className="cyber-window-controls" aria-label="Window controls">
-              <button type="button" onClick={minimizeWindow} aria-label="Minimize window">
+              <button
+                type="button"
+                onClick={minimizeWindow}
+                disabled={windowAction !== null}
+                aria-label="Minimize window"
+                title="Minimize"
+              >
                 <span aria-hidden="true">-</span>
               </button>
-              <button type="button" onClick={toggleMaximizeWindow} aria-label={isMaximized ? "Restore window" : "Maximize window"}>
+              <button
+                type="button"
+                onClick={() => void runWindowAction("maximize")}
+                disabled={windowAction !== null}
+                aria-label={isMaximized ? "Restore window" : "Maximize window"}
+                title={isMaximized ? "Restore" : "Maximize"}
+              >
                 <span aria-hidden="true">{isMaximized ? "❐" : "□"}</span>
               </button>
-              <button type="button" className="is-close" onClick={closeWindow} aria-label="Close window">
+              <button
+                type="button"
+                className={`is-close ${windowAction === "close" ? "is-arming" : ""}`}
+                onClick={closeWindow}
+                disabled={windowAction !== null}
+                aria-label="Hide window to tray"
+                title="Hide to tray"
+              >
                 <span aria-hidden="true">×</span>
               </button>
             </div>
